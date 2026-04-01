@@ -19,9 +19,9 @@ export default function FreelancerDashboard() {
     <div className="flex bg-surface min-h-screen">
       <aside className="w-64 bg-white border-r px-4 py-6 flex-col hidden md:flex">
         <nav className="space-y-2">
-          <Button variant="outline" className="w-full text-left">Overview</Button>
-          <Button variant="outline" className="w-full text-left bg-gray-50 border-transparent">Jobs</Button>
-          <Button variant="outline" className="w-full text-left bg-gray-50 border-transparent">Earnings</Button>
+          <Button variant="outline" className="w-full text-left" onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}>Overview</Button>
+          <Button variant="outline" className="w-full text-left" onClick={() => document.getElementById('jobs-section')?.scrollIntoView({ behavior: 'smooth' })}>My Jobs</Button>
+          <Button variant="outline" className="w-full text-left" onClick={() => document.getElementById('earnings-section')?.scrollIntoView({ behavior: 'smooth' })}>Earnings</Button>
         </nav>
       </aside>
 
@@ -48,7 +48,7 @@ export default function FreelancerDashboard() {
           </Card>
         </section>
 
-        <section className="pt-8">
+        <section id="jobs-section" className="pt-8">
           <h2 className="text-xl font-bold mb-4">My Jobs</h2>
           {isLoading ? (
             <p className="text-gray-400">Loading...</p>
@@ -67,6 +67,22 @@ export default function FreelancerDashboard() {
               ))}
             </Card>
           )}
+        </section>
+
+        <section id="earnings-section" className="pt-8">
+          <h2 className="text-xl font-bold mb-4">Earnings Breakdown</h2>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            {projects.filter(p => (p as any).escrowWallet?.totalReleased > 0).map(p => (
+              <Card key={p.id} className="flex flex-col space-y-1 cursor-pointer hover:shadow-md" onClick={() => navigate(`/projects/${p.id}`)}>                
+                <span className="font-medium text-sm truncate">{p.title}</span>
+                <span className="text-xl font-bold text-trust-green">₹{Number((p as any).escrowWallet?.totalReleased ?? 0).toLocaleString()}</span>
+                <span className="text-xs text-gray-400">released of ₹{Number(p.totalBudget).toLocaleString()}</span>
+              </Card>
+            ))}
+            {projects.filter(p => (p as any).escrowWallet?.totalReleased > 0).length === 0 && (
+              <Card className="col-span-3 text-center text-gray-400 py-6">No earnings yet.</Card>
+            )}
+          </div>
         </section>
       </main>
     </div>

@@ -18,9 +18,9 @@ export default function ClientDashboard() {
     <div className="flex bg-surface min-h-screen">
       <aside className="w-64 bg-white border-r px-4 py-6 flex-col hidden md:flex">
         <nav className="space-y-2">
-          <Button variant="outline" className="w-full text-left">Overview</Button>
-          <Button variant="outline" className="w-full text-left bg-gray-50 border-transparent">My Projects</Button>
-          <Button variant="outline" className="w-full text-left bg-gray-50 border-transparent">Wallet</Button>
+          <Button variant="outline" className="w-full text-left" onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}>Overview</Button>
+          <Button variant="outline" className="w-full text-left" onClick={() => document.getElementById('projects-section')?.scrollIntoView({ behavior: 'smooth' })}>My Projects</Button>
+          <Button variant="outline" className="w-full text-left" onClick={() => navigate('/projects/new')}>+ New Project</Button>
         </nav>
       </aside>
 
@@ -52,7 +52,7 @@ export default function ClientDashboard() {
           </Card>
         </section>
 
-        <section className="pt-8">
+        <section id="projects-section" className="pt-8">
           <h2 className="text-xl font-bold mb-4">My Projects</h2>
           {isLoading ? (
             <p className="text-gray-400">Loading...</p>

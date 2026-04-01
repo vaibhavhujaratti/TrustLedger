@@ -1,6 +1,7 @@
 import { Request, Response } from "express";
 import { prisma } from "../lib/prisma";
 import { AppError } from "../lib/AppError";
+import { Prisma } from "@prisma/client";
 import { generateDisputeSummary } from "../services/gemini/disputeSummarizer";
 import { processEscrowEvent } from "../services/escrow/walletAgent";
 import { notify } from "../services/notifications/notifier";
@@ -164,7 +165,7 @@ export const resolveDispute = async (req: Request, res: Response) => {
   }
 
   // Mark dispute resolved; milestone becomes FUNDS_RELEASED (terminal) for demo flow continuity.
-  const updated = await prisma.$transaction(async (tx) => {
+  const updated = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
     const d = await tx.dispute.update({
       where: { id: disputeId },
       data: { status: "RESOLVED", resolvedAt: new Date() },

@@ -22,7 +22,7 @@ export const depositEscrow = async (req: Request, res: Response) => {
     throw new AppError("You do not have permission to deposit into this escrow", 403);
   }
 
-  if (project.status !== "AWAITING_DEPOSIT") {
+  if (project.status !== "AWAITING_DEPOSIT" && project.status !== "CONTRACT_REVIEW") {
     throw new AppError("Project is not ready for escrow deposit", 422);
   }
 

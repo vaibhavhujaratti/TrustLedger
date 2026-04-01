@@ -103,7 +103,7 @@ export const persistMilestones = async (req: Request, res: Response) => {
 
   const totalBudget = new Prisma.Decimal(project.totalBudget);
 
-  const updated = await prisma.$transaction(async (tx) => {
+  const updated = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
     await tx.milestone.deleteMany({ where: { projectId } });
 
     const created = await Promise.all(
@@ -175,7 +175,6 @@ export const signContract = async (req: Request, res: Response) => {
   if (project.clientId !== userId && project.freelancerId !== userId) {
     throw new AppError("Access denied", 403);
   }
-  if (!project.freelancerId) throw new AppError("Project has no freelancer linked", 422);
   if (!project.contract) throw new AppError("Contract not created", 422);
 
   await prisma.contractSignature.upsert({
@@ -190,7 +189,9 @@ export const signContract = async (req: Request, res: Response) => {
   });
 
   const signedClient = sigs.some((s) => s.userId === project.clientId);
-  const signedFreelancer = sigs.some((s) => s.userId === project.freelancerId);
+  const signedFreelancer = project.freelancerId
+    ? sigs.some((s) => s.userId === project.freelancerId)
+    : false;
 
   const updatedProject =
     signedClient && signedFreelancer
