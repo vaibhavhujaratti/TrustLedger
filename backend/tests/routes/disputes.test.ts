@@ -1,6 +1,6 @@
 import request from "supertest";
-import { app } from "../../../src/app";
-import { prisma, cleanupTestData, seedTestProject } from "../../helpers/seed";
+import { app } from "../../src/app";
+import { prisma, cleanupTestData, seedTestProject } from "../helpers/seed";
 
 describe("Disputes API", () => {
   afterEach(async () => {

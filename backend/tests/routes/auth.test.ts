@@ -1,6 +1,6 @@
 import request from "supertest";
-import { app } from "../../../src/app";
-import { prisma, cleanupTestData } from "../../helpers/seed";
+import { app } from "../../src/app";
+import { prisma, cleanupTestData } from "../helpers/seed";
 
 describe("Auth Controller", () => {
   afterEach(async () => {

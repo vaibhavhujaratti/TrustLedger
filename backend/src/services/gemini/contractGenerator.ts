@@ -8,9 +8,6 @@ export async function generateContractClauses(
   projectDescription: string,
   milestonesText: string
 ): Promise<{ clauses: { title: string; body: string }[] }> {
-  if (!process.env.GEMINI_API_KEY) {
-    throw new AppError("GEMINI_API_KEY is required", 500);
-  }
 
   try {
     const model = genAI.getGenerativeModel({

@@ -7,7 +7,7 @@ export const getOpenProjects = async (req: Request, res: Response) => {
   const projects = await prisma.project.findMany({
     where: {
       freelancerId: null,
-      status: { in: ["DRAFT", "CONTRACT_REVIEW"] },
+      status: { in: ["DRAFT", "CONTRACT_REVIEW", "AWAITING_DEPOSIT", "ACTIVE"] },
     },
     include: { client: { select: { displayName: true } }, milestones: true },
     orderBy: { createdAt: "desc" },
@@ -211,7 +211,7 @@ export const signContract = async (req: Request, res: Response) => {
 
   const project = await prisma.project.findUnique({
     where: { id: projectId },
-    include: { contract: { include: { signatures: true } } },
+    include: { contract: { include: { signatures: true } }, escrowWallet: true },
   });
   if (!project) throw new AppError("Project not found", 404);
   if (project.clientId !== userId && project.freelancerId !== userId) {
@@ -235,11 +235,12 @@ export const signContract = async (req: Request, res: Response) => {
     ? sigs.some((s) => s.userId === project.freelancerId)
     : false;
 
+  const isFunded = project.escrowWallet && Number(project.escrowWallet.totalDeposited) >= Number(project.totalBudget);
   const updatedProject =
     signedClient && signedFreelancer
       ? await prisma.project.update({
           where: { id: projectId },
-          data: { status: "AWAITING_DEPOSIT" },
+          data: { status: isFunded ? "ACTIVE" : "AWAITING_DEPOSIT" },
           include: { milestones: { orderBy: { sequenceOrder: "asc" } }, escrowWallet: true, client: true, freelancer: true },
         })
       : await prisma.project.findUniqueOrThrow({

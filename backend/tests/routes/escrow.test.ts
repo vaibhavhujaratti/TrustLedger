@@ -1,6 +1,6 @@
 import request from "supertest";
-import { app } from "../../../src/app";
-import { prisma, cleanupTestData, seedTestProject } from "../../helpers/seed";
+import { app } from "../../src/app";
+import { prisma, cleanupTestData, seedTestProject } from "../helpers/seed";
 
 describe("Escrow API", () => {
   afterEach(async () => {
@@ -24,7 +24,7 @@ describe("Escrow API", () => {
     expect(wallet?.totalDeposited.toNumber()).toBe(15000);
 
     const ledger = await prisma.walletLedger.findMany({ where: { walletId: wallet!.id } });
-    expect(ledger.some((e) => e.entryType === "DEPOSIT")).toBe(true);
-    expect(ledger.some((e) => e.entryType === "MILESTONE_LOCK")).toBe(true);
+    expect(ledger.some((e: any) => e.entryType === "DEPOSIT")).toBe(true);
+    expect(ledger.some((e: any) => e.entryType === "MILESTONE_LOCK")).toBe(true);
   });
 });

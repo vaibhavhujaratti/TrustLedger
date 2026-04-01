@@ -4,8 +4,7 @@ import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import { AppError } from "../lib/AppError";
 
-const JWT_SECRET = process.env.JWT_SECRET as string;
-const JWT_EXPIRES_IN = (process.env.JWT_EXPIRES_IN || "1h") as any;
+
 
 export const register = async (req: Request, res: Response) => {
   const { email, password, role, displayName, upiHandle } = req.body;
@@ -27,8 +26,8 @@ export const register = async (req: Request, res: Response) => {
     },
   });
 
-  const token = jwt.sign({ userId: user.id, role: user.role }, JWT_SECRET, {
-    expiresIn: JWT_EXPIRES_IN,
+  const token = jwt.sign({ userId: user.id, role: user.role }, process.env.JWT_SECRET as string, {
+    expiresIn: (process.env.JWT_EXPIRES_IN || "1h") as any,
   });
 
   res.status(201).json({
@@ -53,8 +52,8 @@ export const login = async (req: Request, res: Response) => {
     throw new AppError("Invalid credentials", 401);
   }
 
-  const token = jwt.sign({ userId: user.id, role: user.role }, JWT_SECRET, {
-    expiresIn: JWT_EXPIRES_IN,
+  const token = jwt.sign({ userId: user.id, role: user.role }, process.env.JWT_SECRET as string, {
+    expiresIn: (process.env.JWT_EXPIRES_IN || "1h") as any,
   });
 
   res.status(200).json({
