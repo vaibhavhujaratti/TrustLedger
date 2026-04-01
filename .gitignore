@@ -1,6 +1,7 @@
 node_modules/
 .env
 *.env.local
+.env.example
 dist/
 coverage/
 .DS_Store
@@ -9,3 +10,14 @@ coverage/
 !.vscode/extensions.json
 .idea/
 *.tsbuildinfo
+
+# Documentation (internal)
+docs/
+AGENTS.md
+CLAUDE.md
+DEPLOY.md
+GEMINI.md
+SCAFFOLD.md
+SCHEMA.md
+TDD.md
+WIREFRAMES.md

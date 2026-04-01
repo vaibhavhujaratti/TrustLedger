@@ -1,6 +1,59 @@
-# Trust-Bound Freelance Escrow & Invoicing Platform
+# TrustLedger - Freelance Escrow Platform
 
-> Smart-contract-inspired milestone-based escrow for student freelancers. Clients deposit funds into milestone-locked digital wallets before work begins. Funds release only on mutual milestone approval.
+> Smart-contract-inspired milestone-based escrow for freelancers and clients. Clients deposit funds into milestone-locked digital wallets before work begins. Funds release only on mutual milestone approval.
+
+## Features
+
+- **Escrow System**: Secure milestone-based fund management with real-time wallet tracking
+- **AI-Powered**: Gemini-powered milestone generation and dispute resolution
+- **Real-time Chat**: Socket.io powered mediation channel for dispute resolution
+- **Modern UI**: Production-ready React frontend with responsive design
+- **Invoice Generation**: Automated PDF invoice generation upon project completion
+
+## Tech Stack
+
+| Layer | Technology |
+|-------|------------|
+| Frontend | React 18 + TypeScript + Vite + Tailwind CSS |
+| Backend | Node.js + Express + TypeScript |
+| Database | PostgreSQL 15 + Prisma ORM |
+| Real-time | Socket.io |
+| Auth | JWT + bcrypt |
+| AI | Gemini 1.5 Flash |
+| Deploy | Docker + Vercel |
+
+## Quick Start
+
+```bash
+# Install dependencies
+npm install
+
+# Set up environment
+cp .env.example .env
+# Edit .env with your database URL, JWT secrets, and Gemini API key
+
+# Start development servers
+npm run dev
+
+# Run tests
+npm test
+```
+
+### Manual Backend Setup
+
+```bash
+cd backend
+npx prisma migrate dev
+npx prisma db seed
+npm run dev
+```
+
+### Frontend Only
+
+```bash
+cd frontend
+npm run dev
+```
 
 ## 🏗️ Project Structure
 
