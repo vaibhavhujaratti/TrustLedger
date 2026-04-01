@@ -1,8 +1,8 @@
 import { Request, Response, NextFunction } from "express";
 import jwt from "jsonwebtoken";
 import { AppError } from "../lib/AppError";
+import { UserRole } from "@prisma/client";
 
-type UserRole = "CLIENT" | "FREELANCER";
 
 // Extend express Request definition
 declare global {
@@ -27,7 +27,7 @@ export const authenticate = (req: Request, res: Response, next: NextFunction) =>
   try {
     const decoded = jwt.verify(
       token,
-      process.env.JWT_SECRET || "test-secret-key-for-testing-only"
+      process.env.JWT_SECRET as string
     ) as { userId: string; role: UserRole };
     
     req.user = decoded;

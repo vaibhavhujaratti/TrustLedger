@@ -4,7 +4,7 @@ import { generateInvoicePdf } from "../services/invoice/generator";
 import { AppError } from "../lib/AppError";
 
 export const createInvoice = async (req: Request, res: Response) => {
-  const { projectId } = req.params;
+  const projectId = req.params.projectId as string;
 
   const project = await prisma.project.findUnique({
     where: { id: projectId },
@@ -17,41 +17,55 @@ export const createInvoice = async (req: Request, res: Response) => {
 
   if (!project) throw new AppError("Project not found", 404);
 
-  // Guards: all milestones must be released to issue an invoice covering the whole project
-  const allReleased = project.milestones.every((m: any) => m.status === "FUNDS_RELEASED");
+  const allReleased = project.milestones.every((m) => m.status === "FUNDS_RELEASED");
   if (!allReleased) {
     throw new AppError("Cannot generate invoice until all milestones are released", 422);
   }
 
-  // Invoice Number generator logic TB-YYYY-NNNN format snapshot
-  const invoiceNumber = `TB-${new Date().getFullYear()}-${Math.floor(1000 + Math.random() * 9000)}`;
-  
-  // Snapshoting data statically
-  const metadata = {
-    amount: project.totalBudget,
-    client: project.client.displayName,
-    freelancer: project.freelancer?.displayName,
-    milestones: project.milestones.map((m: any) => ({ title: m.title, amount: m.amount })),
-  };
+  // Idempotent: if invoice already exists, return it
+  const existing = await prisma.invoice.findFirst({ where: { projectId } });
+  const invoice =
+    existing ??
+    (await prisma.invoice.create({
+      data: {
+        projectId,
+        invoiceNumber: `TB-${new Date().getFullYear()}-${Math.floor(1000 + Math.random() * 9000)}`,
+        totalAmount: project.totalBudget,
+        metadata: {
+          amount: project.totalBudget,
+          client: project.client.displayName,
+          freelancer: project.freelancer?.displayName,
+          milestones: project.milestones.map((m) => ({
+            title: m.title,
+            description: m.description,
+            approvedAt: m.approvedAt,
+            amount: m.amount,
+          })),
+        },
+      },
+    }));
 
-  const invoice = await prisma.invoice.create({
-    data: {
-      projectId,
-      invoiceNumber,
-      totalAmount: project.totalBudget,
-      metadata
-    },
-  });
+  const invoicePdfBase64 = await generateInvoicePdf(invoice.invoiceNumber, invoice.metadata);
 
-  // Call headless PDF generation via memory byte streaming simulated path
-  const invoicePdfBase64 = await generateInvoicePdf(invoiceNumber, metadata);
-
-  // Store the path later when cloud uploads are supported, return base64 for now
   res.status(201).json({
     success: true,
-    data: {
-      invoice,
-      pdfPayload: invoicePdfBase64,
-    },
+    data: { invoice, pdfPayload: invoicePdfBase64 },
   });
+};
+
+export const getInvoice = async (req: Request, res: Response) => {
+  const projectId = req.params.projectId as string;
+  const userId = req.user!.userId;
+
+  const project = await prisma.project.findUnique({
+    where: { id: projectId },
+    select: { clientId: true, freelancerId: true },
+  });
+  if (!project) throw new AppError("Project not found", 404);
+  if (project.clientId !== userId && project.freelancerId !== userId) throw new AppError("Access denied", 403);
+
+  const invoice = await prisma.invoice.findFirst({ where: { projectId } });
+  if (!invoice) throw new AppError("Invoice not found", 404);
+
+  res.status(200).json({ success: true, data: invoice });
 };

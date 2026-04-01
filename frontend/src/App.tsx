@@ -11,6 +11,8 @@ import CreateProjectWizard from "./pages/CreateProjectWizard";
 import ProjectDetail from "./pages/ProjectDetail";
 import DisputeChat from "./pages/DisputeChat";
 import InvoicePreview from "./pages/InvoicePreview";
+import { useMyNotifications, useMarkNotificationRead } from "./api/useNotifications";
+import { useMemo, useState } from "react";
 
 // Role-based auth guard wrapper
 const ProtectedRoute = ({ children, allowedRole }: { children: JSX.Element, allowedRole?: string }) => {
@@ -22,6 +24,10 @@ const ProtectedRoute = ({ children, allowedRole }: { children: JSX.Element, allo
 
 function App() {
   const { isAuthenticated, user } = useAuthStore();
+  const { data: notifications = [] } = useMyNotifications(isAuthenticated);
+  const unreadCount = useMemo(() => notifications.filter((n) => !n.isRead).length, [notifications]);
+  const markRead = useMarkNotificationRead();
+  const [showNotifs, setShowNotifs] = useState(false);
 
   return (
     <Router>
@@ -32,6 +38,12 @@ function App() {
           <div>
             {isAuthenticated ? (
               <div className="flex items-center gap-4">
+                <button
+                  className="text-sm"
+                  onClick={() => setShowNotifs((s) => !s)}
+                >
+                  Notifications{unreadCount ? ` (${unreadCount})` : ""}
+                </button>
                 <span className="text-sm text-gray-600">Logged in as {user?.email} ({user?.role})</span>
                 <button onClick={() => { useAuthStore.getState().logout(); window.location.href = '/'; }} className="text-sm text-trust-red hover:underline">Logout</button>
               </div>
@@ -40,6 +52,32 @@ function App() {
             )}
           </div>
         </nav>
+        {isAuthenticated && showNotifs && (
+          <div className="border-b bg-white px-4 py-3">
+            <div className="max-w-5xl mx-auto space-y-2">
+              {notifications.length === 0 ? (
+                <div className="text-sm text-gray-500">No notifications yet.</div>
+              ) : (
+                notifications.slice(0, 10).map((n) => (
+                  <div key={n.id} className="flex items-start justify-between gap-4">
+                    <div>
+                      <div className="text-sm font-semibold">{n.title}</div>
+                      <div className="text-sm text-gray-600">{n.body}</div>
+                    </div>
+                    {!n.isRead && (
+                      <button
+                        className="text-sm text-trust-blue hover:underline"
+                        onClick={() => markRead.mutate(n.id)}
+                      >
+                        Mark read
+                      </button>
+                    )}
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+        )}
 
         {/* Dynamic Outlet */}
         <main className="flex-1 bg-background text-foreground relative p-4 lg:p-8 overflow-y-auto">

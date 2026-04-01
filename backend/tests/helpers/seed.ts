@@ -48,10 +48,64 @@ export async function seedTestProject() {
       description: "A test project for integration tests.",
       totalBudget: 10000,
       deadline: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
-      status: ProjectStatus.ACTIVE,
+      status: ProjectStatus.AWAITING_DEPOSIT,
       clientId: client.id,
       freelancerId: freelancer.id,
     },
+  });
+
+  await prisma.contract.create({
+    data: {
+      projectId: project.id,
+      clauses: [{ title: "Scope", body: "Test scope" }],
+      signatures: {
+        createMany: {
+          data: [
+            { userId: client.id, ipHash: "client-ip-hash-test" },
+            { userId: freelancer.id, ipHash: "freelancer-ip-hash-test" },
+          ],
+        },
+      },
+    },
+  });
+
+  // Required milestones for escrow lock + FSM tests
+  await prisma.milestone.createMany({
+    data: [
+      {
+        projectId: project.id,
+        title: "Milestone 1",
+        description: "M1",
+        budgetPercent: 30,
+        amount: 3000,
+        estimatedDays: 3,
+        verificationCriteria: "Criteria",
+        sequenceOrder: 1,
+        status: "PENDING",
+      },
+      {
+        projectId: project.id,
+        title: "Milestone 2",
+        description: "M2",
+        budgetPercent: 50,
+        amount: 5000,
+        estimatedDays: 5,
+        verificationCriteria: "Criteria",
+        sequenceOrder: 2,
+        status: "PENDING",
+      },
+      {
+        projectId: project.id,
+        title: "Milestone 3",
+        description: "M3",
+        budgetPercent: 20,
+        amount: 2000,
+        estimatedDays: 2,
+        verificationCriteria: "Criteria",
+        sequenceOrder: 3,
+        status: "PENDING",
+      },
+    ],
   });
 
   const clientToken = jwt.sign(

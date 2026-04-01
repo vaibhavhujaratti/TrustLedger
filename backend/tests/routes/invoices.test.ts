@@ -15,9 +15,12 @@ describe("Invoices API", () => {
         projectId: project.id,
         title: "Task waiting",
         description: "Task waiting description",
+        budgetPercent: 10,
         amount: 2500,
         status: "APPROVED", // specifically NOT "FUNDS_RELEASED"
         estimatedDays: 5,
+        verificationCriteria: "Criteria",
+        sequenceOrder: 99,
       }
     });
 
@@ -33,15 +36,9 @@ describe("Invoices API", () => {
   it("accepts valid invoice bundle generations natively producing bytes", async () => {
     const { clientToken, project } = await seedTestProject();
 
-    const milestone = await prisma.milestone.create({
-      data: {
-        projectId: project.id,
-        title: "Task Done",
-        description: "Task done layout",
-        amount: 2500,
-        status: "FUNDS_RELEASED",
-        estimatedDays: 5,
-      }
+    await prisma.milestone.updateMany({
+      where: { projectId: project.id },
+      data: { status: "FUNDS_RELEASED", approvedAt: new Date() },
     });
 
     const res = await request(app)

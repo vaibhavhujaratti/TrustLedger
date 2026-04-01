@@ -1,7 +1,7 @@
 import { Request, Response } from "express";
 import { prisma } from "../lib/prisma";
-import { processEscrowEvent } from "../services/escrow/walletAgent";
 import { AppError } from "../lib/AppError";
+import { Prisma } from "@prisma/client";
 
 export const getMyProjects = async (req: Request, res: Response) => {
   const userId = req.user!.userId;
@@ -17,7 +17,7 @@ export const getMyProjects = async (req: Request, res: Response) => {
 };
 
 export const getProject = async (req: Request, res: Response) => {
-  const { id } = req.params;
+  const id = req.params.id as string;
   const userId = req.user!.userId;
 
   const project = await prisma.project.findUnique({
@@ -55,7 +55,7 @@ export const createProject = async (req: Request, res: Response) => {
 };
 
 export const linkFreelancer = async (req: Request, res: Response) => {
-  const { projectId } = req.params;
+  const projectId = req.params.projectId as string;
   const { email } = req.body;
 
   const freelancer = await prisma.user.findUnique({ where: { email } });
@@ -72,4 +72,137 @@ export const linkFreelancer = async (req: Request, res: Response) => {
   });
 
   res.status(200).json({ success: true, data: project });
+};
+
+/**
+ * Persist AI-generated milestones to the project.
+ * Side effects: overwrites existing milestones for the project (prototype behavior).
+ */
+export const persistMilestones = async (req: Request, res: Response) => {
+  const projectId = req.params.projectId as string;
+  const userId = req.user!.userId;
+  const { milestones } = req.body as {
+    milestones: {
+      title: string;
+      description: string;
+      budgetPercent: number;
+      estimatedDays: number;
+      verificationCriteria: string;
+    }[];
+  };
+
+  const project = await prisma.project.findUnique({
+    where: { id: projectId },
+    include: { milestones: true },
+  });
+  if (!project) throw new AppError("Project not found", 404);
+  if (project.clientId !== userId) throw new AppError("Access denied", 403);
+
+  const sum = milestones.reduce((acc, m) => acc + m.budgetPercent, 0);
+  if (sum !== 100) throw new AppError("Milestone budgetPercent must sum to 100", 422);
+
+  const totalBudget = new Prisma.Decimal(project.totalBudget);
+
+  const updated = await prisma.$transaction(async (tx) => {
+    await tx.milestone.deleteMany({ where: { projectId } });
+
+    const created = await Promise.all(
+      milestones.map((m, idx) => {
+        const amount = totalBudget.mul(m.budgetPercent).div(100);
+        return tx.milestone.create({
+          data: {
+            projectId,
+            title: m.title,
+            description: m.description,
+            budgetPercent: m.budgetPercent,
+            amount,
+            estimatedDays: m.estimatedDays,
+            verificationCriteria: m.verificationCriteria,
+            sequenceOrder: idx + 1,
+            status: "PENDING",
+          },
+        });
+      })
+    );
+
+    const proj = await tx.project.update({
+      where: { id: projectId },
+      data: { status: "CONTRACT_REVIEW" },
+      include: { milestones: { orderBy: { sequenceOrder: "asc" } } },
+    });
+
+    return { project: proj, milestones: created };
+  });
+
+  res.status(200).json({ success: true, data: updated.project });
+};
+
+/**
+ * Create or replace the cached contract clauses for a project.
+ */
+export const upsertContract = async (req: Request, res: Response) => {
+  const projectId = req.params.projectId as string;
+  const userId = req.user!.userId;
+  const { clauses } = req.body as { clauses: { title: string; body: string }[] };
+
+  const project = await prisma.project.findUnique({ where: { id: projectId } });
+  if (!project) throw new AppError("Project not found", 404);
+  if (project.clientId !== userId) throw new AppError("Access denied", 403);
+
+  const contract = await prisma.contract.upsert({
+    where: { projectId },
+    create: { projectId, clauses },
+    update: { clauses },
+  });
+
+  res.status(200).json({ success: true, data: contract });
+};
+
+/**
+ * Sign a contract for the project as the current user.
+ * When both parties have signed, project moves to AWAITING_DEPOSIT.
+ */
+export const signContract = async (req: Request, res: Response) => {
+  const projectId = req.params.projectId as string;
+  const userId = req.user!.userId;
+  const { ipHash } = req.body as { ipHash: string };
+
+  const project = await prisma.project.findUnique({
+    where: { id: projectId },
+    include: { contract: { include: { signatures: true } } },
+  });
+  if (!project) throw new AppError("Project not found", 404);
+  if (project.clientId !== userId && project.freelancerId !== userId) {
+    throw new AppError("Access denied", 403);
+  }
+  if (!project.freelancerId) throw new AppError("Project has no freelancer linked", 422);
+  if (!project.contract) throw new AppError("Contract not created", 422);
+
+  await prisma.contractSignature.upsert({
+    where: { contractId_userId: { contractId: project.contract.id, userId } },
+    create: { contractId: project.contract.id, userId, ipHash },
+    update: { ipHash }, // prototype: allow re-sign to update hash
+  });
+
+  const sigs = await prisma.contractSignature.findMany({
+    where: { contractId: project.contract.id },
+    select: { userId: true },
+  });
+
+  const signedClient = sigs.some((s) => s.userId === project.clientId);
+  const signedFreelancer = sigs.some((s) => s.userId === project.freelancerId);
+
+  const updatedProject =
+    signedClient && signedFreelancer
+      ? await prisma.project.update({
+          where: { id: projectId },
+          data: { status: "AWAITING_DEPOSIT" },
+          include: { milestones: { orderBy: { sequenceOrder: "asc" } }, escrowWallet: true, client: true, freelancer: true },
+        })
+      : await prisma.project.findUniqueOrThrow({
+          where: { id: projectId },
+          include: { milestones: { orderBy: { sequenceOrder: "asc" } }, escrowWallet: true, client: true, freelancer: true },
+        });
+
+  res.status(200).json({ success: true, data: updatedProject });
 };

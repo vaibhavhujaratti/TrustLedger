@@ -51,3 +51,44 @@ export function useLinkFreelancer() {
     },
   });
 }
+
+export function usePersistMilestones() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (payload: { projectId: string; milestones: any[] }) => {
+      const { data } = await apiClient.post<{ data: Project }>(`/projects/${payload.projectId}/milestones`, {
+        milestones: payload.milestones,
+      });
+      return data.data;
+    },
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: ["projects", variables.projectId] });
+    },
+  });
+}
+
+export function useUpsertContract() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (payload: { projectId: string; clauses: { title: string; body: string }[] }) => {
+      const { data } = await apiClient.post(`/projects/${payload.projectId}/contract`, { clauses: payload.clauses });
+      return data.data;
+    },
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: ["projects", variables.projectId] });
+    },
+  });
+}
+
+export function useSignContract() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (payload: { projectId: string; ipHash: string }) => {
+      const { data } = await apiClient.post(`/projects/${payload.projectId}/sign`, { ipHash: payload.ipHash });
+      return data.data as Project;
+    },
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: ["projects", variables.projectId] });
+    },
+  });
+}

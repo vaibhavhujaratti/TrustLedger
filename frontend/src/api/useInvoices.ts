@@ -1,4 +1,4 @@
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiClient } from "./client";
 
 export function useCreateInvoice() {
@@ -12,5 +12,16 @@ export function useCreateInvoice() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["invoices"] });
     },
+  });
+}
+
+export function useInvoice(projectId: string) {
+  return useQuery({
+    queryKey: ["invoices", projectId],
+    queryFn: async () => {
+      const { data } = await apiClient.get(`/invoices/${projectId}`);
+      return data.data;
+    },
+    enabled: !!projectId,
   });
 }

@@ -3,18 +3,33 @@ import { useParams } from "react-router-dom";
 import { Card, Button, Input } from "../components/ui/core";
 import { useAuthStore } from "../stores/authStore";
 import { io, Socket } from "socket.io-client";
+import { useDispute, useGenerateDisputeAiSummary, useResolveDispute } from "../api/useDisputes";
 
 export default function DisputeChat() {
   const { projectId, id: disputeId } = useParams();
   const { user, token } = useAuthStore();
-  const [messages, setMessages] = useState<{ sender: string; text: string }[]>([
-    { sender: "System", text: "Dispute channel opened. Both parties can communicate here." },
-  ]);
+  const { data: dispute } = useDispute(disputeId || "");
+  const aiSummary = useGenerateDisputeAiSummary(disputeId || "");
+  const resolve = useResolveDispute(disputeId || "");
+
+  const [messages, setMessages] = useState<{ sender: string; text: string }[]>([]);
   const [input, setInput] = useState("");
   const socketRef = useRef<Socket | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
+    if (dispute?.messages) {
+      setMessages(
+        dispute.messages.map((m: any) => ({
+          sender: m.sender?.role ?? "USER",
+          text: m.body,
+        }))
+      );
+    }
+  }, [dispute]);
+
+  useEffect(() => {
+    if (!disputeId) return;
     const socket = io(import.meta.env.VITE_SOCKET_URL || "http://localhost:3001", {
       auth: { token },
     });
@@ -37,10 +52,8 @@ export default function DisputeChat() {
     if (!input.trim() || !socketRef.current) return;
     socketRef.current.emit("send_message", {
       disputeId,
-      senderId: user?.id,
       body: input,
     });
-    setMessages(prev => [...prev, { sender: user?.role ?? "USER", text: input }]);
     setInput("");
   };
 
@@ -52,7 +65,42 @@ export default function DisputeChat() {
           <p className="text-sm font-medium">Project ID: {projectId}</p>
           <div className="mt-4 p-4 bg-white rounded border space-y-2">
             <h3 className="font-bold text-xs uppercase text-gray-400">AI Neutral Summary</h3>
-            <p className="text-sm text-gray-500">Use the chat to communicate. An AI summary can be generated once both parties have responded.</p>
+            {dispute?.aiSummary ? (
+              <div className="space-y-2">
+                <p className="text-sm text-gray-700">{dispute.aiSummary.proposedResolution}</p>
+                <p className="text-xs text-gray-500">
+                  Suggested split: {dispute.aiSummary?.suggestedSplit?.freelancer ?? dispute.proposedFreelancerPct ?? 50}% freelancer /{" "}
+                  {dispute.aiSummary?.suggestedSplit?.client ?? dispute.proposedClientPct ?? 50}% client
+                </p>
+              </div>
+            ) : (
+              <p className="text-sm text-gray-500">
+                Use the chat to communicate. Then generate a neutral AI summary and proposed split.
+              </p>
+            )}
+          </div>
+
+          <div className="mt-4 flex flex-col gap-2">
+            <Button
+              variant="outline"
+              disabled={aiSummary.isPending || !disputeId || (messages?.length ?? 0) < 2}
+              onClick={() => aiSummary.mutate()}
+            >
+              {aiSummary.isPending ? "Generating summary..." : "Generate AI Summary"}
+            </Button>
+
+            <Button
+              variant="success"
+              disabled={resolve.isPending || !dispute || !dispute.proposedFreelancerPct || !dispute.proposedClientPct}
+              onClick={() =>
+                resolve.mutate({
+                  freelancerPct: dispute.proposedFreelancerPct ?? 50,
+                  clientPct: dispute.proposedClientPct ?? 50,
+                })
+              }
+            >
+              {resolve.isPending ? "Resolving..." : "Accept Proposed Resolution"}
+            </Button>
           </div>
         </Card>
       </div>

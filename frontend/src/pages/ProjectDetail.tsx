@@ -4,6 +4,9 @@ import { Button, Card, Badge } from "../components/ui/core";
 import { useAuthStore } from "../stores/authStore";
 import { useApproveMilestone, useReviewMilestone, useSubmitMilestone } from "../api/useMilestones";
 import { useProject } from "../api/useProjects";
+import { useRaiseDispute } from "../api/useDisputes";
+import { useDepositEscrow } from "../api/useEscrow";
+import { useSignContract } from "../api/useProjects";
 
 export default function ProjectDetail() {
   const { id } = useParams();
@@ -16,6 +19,9 @@ export default function ProjectDetail() {
   const { mutate: approve } = useApproveMilestone(id!);
   const { mutate: review } = useReviewMilestone(id!);
   const { mutate: submit } = useSubmitMilestone(id!);
+  const { mutateAsync: raiseDispute } = useRaiseDispute(id!);
+  const depositEscrow = useDepositEscrow(id!);
+  const signContract = useSignContract();
 
   if (isLoading) return <div className="flex justify-center py-20 text-gray-500">Loading project...</div>;
   if (error || !project) return <div className="flex justify-center py-20 text-red-500">Project not found.</div>;
@@ -52,7 +58,18 @@ export default function ProjectDetail() {
                 <div className="mt-4 md:mt-0 flex space-x-2">
                   {isClient && m.status === "SUBMITTED" && (
                     <>
-                      <Button variant="danger" onClick={() => navigate(`/projects/${id}/dispute/${m.id}`)}>Dispute</Button>
+                      <Button
+                        variant="danger"
+                        onClick={async () => {
+                          const reason =
+                            window.prompt("Why are you raising a dispute? (min 10 chars)") ||
+                            "Deliverable does not meet the agreed criteria.";
+                          const dispute = await raiseDispute({ milestoneId: m.id, reason });
+                          navigate(`/projects/${id}/dispute/${dispute.id}`);
+                        }}
+                      >
+                        Dispute
+                      </Button>
                       <Button variant="success" onClick={() => approve(m.id)}>Release ₹{Number(m.amount).toLocaleString()}</Button>
                     </>
                   )}
@@ -70,6 +87,29 @@ export default function ProjectDetail() {
 
         {/* Sidebar */}
         <div className="col-span-1 md:col-span-4 space-y-6">
+          {(project.status === "CONTRACT_REVIEW" || project.status === "AWAITING_DEPOSIT") && (
+            <Card className="bg-white border-border">
+              <h3 className="font-bold mb-2">Contract</h3>
+              <p className="text-sm text-gray-600">
+                Both parties must sign before escrow can be deposited.
+              </p>
+              <div className="mt-4 space-y-2">
+                <Button
+                  variant="primary"
+                  className="w-full"
+                  onClick={() =>
+                    signContract.mutate(
+                      { projectId: id!, ipHash: crypto.randomUUID().replace(/-/g, "") },
+                      { onSuccess: () => {} }
+                    )
+                  }
+                >
+                  Sign Contract
+                </Button>
+              </div>
+            </Card>
+          )}
+
           <Card className="bg-gray-50 border-gray-200">
             <h3 className="font-bold mb-4">Escrow Wallet</h3>
             <div className="space-y-4">
@@ -88,7 +128,19 @@ export default function ProjectDetail() {
               )}
             </div>
             {isClient && (
-              <Button onClick={() => navigate(`/projects/${id}/invoice`)} variant="outline" className="w-full mt-6">Generate Invoice</Button>
+              <div className="mt-6 space-y-2">
+                <Button
+                  onClick={() => depositEscrow.mutate(Number(project.totalBudget))}
+                  variant="success"
+                  className="w-full"
+                  disabled={depositEscrow.isPending || project.status !== "AWAITING_DEPOSIT"}
+                >
+                  {depositEscrow.isPending ? "Depositing..." : `Deposit ₹${Number(project.totalBudget).toLocaleString()}`}
+                </Button>
+                <Button onClick={() => navigate(`/projects/${id}/invoice`)} variant="outline" className="w-full">
+                  Invoice
+                </Button>
+              </div>
             )}
           </Card>
         </div>

@@ -1,8 +1,13 @@
 import { GoogleGenerativeAI } from "@google/generative-ai";
+import { AppError } from "../../lib/AppError";
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || "");
 
 export async function generateMilestones(title: string, desc: string, budget: number) {
+  if (!process.env.GEMINI_API_KEY) {
+    throw new AppError("GEMINI_API_KEY is required", 500);
+  }
+
   const model = genAI.getGenerativeModel({
     model: "gemini-1.5-flash",
     generationConfig: {
