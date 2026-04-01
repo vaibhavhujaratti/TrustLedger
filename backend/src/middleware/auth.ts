@@ -1,7 +1,8 @@
 import { Request, Response, NextFunction } from "express";
 import jwt from "jsonwebtoken";
 import { AppError } from "../lib/AppError";
-import { UserRole } from "@prisma/client";
+
+type UserRole = "CLIENT" | "FREELANCER";
 
 // Extend express Request definition
 declare global {

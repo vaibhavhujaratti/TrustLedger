@@ -2,19 +2,21 @@ import React from "react";
 import { useAuthStore } from "../stores/authStore";
 import { Card, Button, Badge } from "../components/ui/core";
 import { useNavigate } from "react-router-dom";
+import { useMyProjects } from "../api/useProjects";
 
 export default function ClientDashboard() {
   const { user } = useAuthStore();
   const navigate = useNavigate();
+  const { data: projects = [], isLoading } = useMyProjects();
 
-  // Mocks representing data retrieved from an eventual useDashboard hook
-  const activeProjects = 3;
-  const inEscrow = 45000;
-  const released = 12000;
+  const inEscrow = projects.reduce((sum, p) => sum + Number((p as any).escrowWallet?.totalDeposited ?? 0), 0);
+  const released = projects.reduce((sum, p) => sum + Number((p as any).escrowWallet?.totalReleased ?? 0), 0);
+  const activeProjects = projects.filter(p => p.status === "ACTIVE" || p.status === "IN_PROGRESS" as any).length;
+  const completed = projects.filter(p => p.status === "COMPLETED" as any).length;
 
   return (
     <div className="flex bg-surface min-h-screen">
-      <aside className="w-64 bg-white border-r px-4 py-6 flex flex-col hidden md:flex">
+      <aside className="w-64 bg-white border-r px-4 py-6 flex-col hidden md:flex">
         <nav className="space-y-2">
           <Button variant="outline" className="w-full text-left">Overview</Button>
           <Button variant="outline" className="w-full text-left bg-gray-50 border-transparent">My Projects</Button>
@@ -34,11 +36,11 @@ export default function ClientDashboard() {
         <section className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
           <Card className="flex flex-col space-y-1">
             <span className="text-sm font-medium text-gray-500">In Escrow</span>
-            <span className="text-3xl font-bold text-trust-green">₹{inEscrow}</span>
+            <span className="text-3xl font-bold text-trust-green">₹{inEscrow.toLocaleString()}</span>
           </Card>
           <Card className="flex flex-col space-y-1">
             <span className="text-sm font-medium text-gray-500">Funds Released</span>
-            <span className="text-3xl font-bold">₹{released}</span>
+            <span className="text-3xl font-bold">₹{released.toLocaleString()}</span>
           </Card>
           <Card className="flex flex-col space-y-1">
             <span className="text-sm font-medium text-gray-500">Active Projects</span>
@@ -46,22 +48,29 @@ export default function ClientDashboard() {
           </Card>
           <Card className="flex flex-col space-y-1">
             <span className="text-sm font-medium text-gray-500">Completed</span>
-            <span className="text-3xl font-bold">2</span>
+            <span className="text-3xl font-bold">{completed}</span>
           </Card>
         </section>
 
         <section className="pt-8">
-          <h2 className="text-xl font-bold mb-4">Recent Activity</h2>
-          <Card className="divide-y p-0">
-            <div className="p-4 flex items-center justify-between">
-              <span className="text-sm">💰 Milestone 2 approved for "Web Redesign"</span>
-              <span className="text-xs text-gray-400">2h ago</span>
-            </div>
-            <div className="p-4 flex items-center justify-between">
-              <span className="text-sm">✅ Milestone funds released ₹6,000</span>
-              <span className="text-xs text-gray-400">2h ago</span>
-            </div>
-          </Card>
+          <h2 className="text-xl font-bold mb-4">My Projects</h2>
+          {isLoading ? (
+            <p className="text-gray-400">Loading...</p>
+          ) : projects.length === 0 ? (
+            <Card className="text-center text-gray-400 py-10">No projects yet. Create your first one!</Card>
+          ) : (
+            <Card className="divide-y p-0">
+              {projects.map(p => (
+                <div key={p.id} className="p-4 flex items-center justify-between hover:bg-gray-50 cursor-pointer" onClick={() => navigate(`/projects/${p.id}`)}>
+                  <div>
+                    <p className="font-medium">{p.title}</p>
+                    <p className="text-xs text-gray-400">Budget: ₹{Number(p.totalBudget).toLocaleString()}</p>
+                  </div>
+                  <Badge status={p.status} />
+                </div>
+              ))}
+            </Card>
+          )}
         </section>
       </main>
     </div>

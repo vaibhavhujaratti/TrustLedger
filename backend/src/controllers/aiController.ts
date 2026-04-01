@@ -5,7 +5,7 @@ import { generateDisputeSummary } from "../services/gemini/disputeSummarizer";
 
 export const getMilestoneSuggestions = async (req: Request, res: Response) => {
   const { title, description, budget, deadline } = req.body;
-  const milestones = await generateMilestones(title, description, budget, deadline);
+  const milestones = await generateMilestones(title, description, budget);
   res.status(200).json({ success: true, data: milestones });
 };
 

@@ -1,9 +1,12 @@
 import { Router } from "express";
 import { asyncHandler } from "../middleware/asyncHandler";
 import { authenticate, authorizeRole } from "../middleware/auth";
-import { createProject, linkFreelancer } from "../controllers/projectController";
+import { getMyProjects, getProject, createProject, linkFreelancer } from "../controllers/projectController";
 
 const router = Router();
+
+router.get("/", authenticate, asyncHandler(getMyProjects));
+router.get("/:id", authenticate, asyncHandler(getProject));
 
 router.post(
   "/",

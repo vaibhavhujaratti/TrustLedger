@@ -5,7 +5,7 @@ import jwt from "jsonwebtoken";
 import { AppError } from "../lib/AppError";
 
 const JWT_SECRET = process.env.JWT_SECRET || "test-secret-key-for-testing-only";
-const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || "1h";
+const JWT_EXPIRES_IN = (process.env.JWT_EXPIRES_IN || "1h") as any;
 
 export const register = async (req: Request, res: Response) => {
   const { email, password, role, displayName, upiHandle } = req.body;
