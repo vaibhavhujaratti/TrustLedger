@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { depositEscrow } from "../controllers/escrowController";
+import { depositEscrow, getLedger } from "../controllers/escrowController";
 import { validateBody } from "../middleware/validate";
 import { authenticate, authorizeRole } from "../middleware/auth";
 import { asyncHandler } from "../middleware/asyncHandler";
@@ -13,6 +13,12 @@ router.post(
   authorizeRole("CLIENT"),
   validateBody(depositSchema),
   asyncHandler(depositEscrow)
+);
+
+router.get(
+  "/:projectId/ledger",
+  authenticate,
+  asyncHandler(getLedger)
 );
 
 export { router as escrowRouter };

@@ -23,7 +23,7 @@ describe("Projects API", () => {
 
     expect(res.status).toBe(201);
     expect(res.body.data.status).toBe("DRAFT");
-    expect(res.body.data.totalBudget).toBe(15000);
+    expect(Number(res.body.data.totalBudget)).toBe(15000);
   });
 
   it("links freelance developer by email shifting to CONTRACT_REVIEW", async () => {

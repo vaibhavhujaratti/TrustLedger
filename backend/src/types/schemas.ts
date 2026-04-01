@@ -26,9 +26,9 @@ export const submitMilestoneSchema = z.object({
 
 // --- Dispute Schemas ---
 export const raiseDisputeSchema = z.object({
-  projectId: z.string().min(1),
-  milestoneId: z.string().min(1),
-  reason: z.string().min(10),
+  projectId: z.string().cuid(),
+  milestoneId: z.string().cuid(),
+  reason: z.string().min(10).max(2000),
 });
 
 // --- Project lifecycle schemas ---

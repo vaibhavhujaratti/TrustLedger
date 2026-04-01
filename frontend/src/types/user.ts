@@ -32,6 +32,7 @@ export interface Milestone {
   amount: number;
   status: MilestoneStatus;
   estimatedDays: number;
+  approvedAt?: Date | string | null;
 }
 
 export interface Project {
@@ -44,6 +45,6 @@ export interface Project {
   freelancerId?: string | null;
   milestones?: Milestone[];
   escrowWallet?: EscrowWallet | null;
-  client?: { displayName: string } | null;
-  freelancer?: { displayName: string } | null;
+  client?: { displayName: string; upiHandle?: string | null } | null;
+  freelancer?: { displayName: string; upiHandle?: string | null } | null;
 }

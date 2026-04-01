@@ -1,17 +1,21 @@
-import { Prisma, LedgerEntryType } from "@prisma/client";
+import { Prisma, LedgerEntryType, WalletLedger } from "@prisma/client";
 import { prisma } from "../../lib/prisma";
 import { AppError } from "../../lib/AppError";
 
-type WalletEntryInfo = {
-  walletId: string;
-  entryType: LedgerEntryType;
-  amount: number;
-  direction: "CREDIT" | "DEBIT";
-  actorId: string;
-  milestoneId?: string | null;
-  memo?: string;
-};
-
+/**
+ * Processes an escrow event and updates the wallet ledger atomically.
+ * Creates an immutable ledger entry and updates running totals within a transaction.
+ * @param walletId - The escrow wallet to operate on
+ * @param event - The type of ledger entry (DEPOSIT, RELEASE, MILESTONE_LOCK, REFUND, DISPUTE_RESOLVE)
+ * @param amount - Positive amount for the transaction
+ * @param actorId - User who triggered this event
+ * @param milestoneId - Optional milestone ID for milestone-specific entries
+ * @param memo - Human-readable description
+ * @param impact - Override the computed impact type
+ * @returns The created WalletLedger entry
+ * @throws {AppError} 422 if insufficient balance for the operation
+ * @throws {AppError} 500 if DISPUTE_RESOLVE missing required impact
+ */
 export async function processEscrowEvent(
   walletId: string,
   event: LedgerEntryType,
@@ -20,7 +24,7 @@ export async function processEscrowEvent(
   milestoneId?: string | null,
   memo?: string,
   impact?: "DEPOSIT" | "RELEASE" | "REFUND" | null
-) {
+): Promise<WalletLedger> {
   return prisma.$transaction(async (tx: Prisma.TransactionClient) => {
     const wallet = await tx.escrowWallet.findUniqueOrThrow({
       where: { id: walletId },
@@ -28,7 +32,6 @@ export async function processEscrowEvent(
 
     const balance = wallet.totalDeposited.minus(wallet.totalReleased).minus(wallet.totalRefunded);
 
-    // Guard against insufficient funds
     const effectiveImpact =
       impact ??
       (event === "DEPOSIT"
@@ -52,7 +55,6 @@ export async function processEscrowEvent(
       throw new AppError("Dispute resolve impact missing", 500);
     }
 
-    // Append the immutable ledger entry
     const newEntry = await tx.walletLedger.create({
       data: {
         walletId,
@@ -65,7 +67,6 @@ export async function processEscrowEvent(
       },
     });
 
-    // Update running totals immutably
     await tx.escrowWallet.update({
       where: { id: walletId },
       data:
@@ -75,7 +76,7 @@ export async function processEscrowEvent(
           ? { totalReleased: { increment: amount } }
           : effectiveImpact === "REFUND"
           ? { totalRefunded: { increment: amount } }
-          : {}, // locks don't alter absolute running totals
+          : {},
     });
 
     return newEntry;

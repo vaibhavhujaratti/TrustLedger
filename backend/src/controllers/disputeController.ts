@@ -2,13 +2,29 @@ import { Request, Response } from "express";
 import { prisma } from "../lib/prisma";
 import { AppError } from "../lib/AppError";
 import { Prisma } from "@prisma/client";
-import { generateDisputeSummary } from "../services/gemini/disputeSummarizer";
+import { generateDisputeSummary, type DisputeSummary } from "../services/gemini/disputeSummarizer";
 import { processEscrowEvent } from "../services/escrow/walletAgent";
 import { notify } from "../services/notifications/notifier";
 
+/**
+ * Raises a dispute on a milestone. Both freelancer and client can raise disputes.
+ * @param req - Express request with projectId, milestoneId, and reason in body
+ * @param res - Express response
+ * @throws {AppError} 400 if required fields are missing
+ * @throws {AppError} 404 if milestone not found
+ * @throws {AppError} 403 if user is not part of the project
+ * @throws {AppError} 422 if milestone already has released funds
+ */
 export const raiseDispute = async (req: Request, res: Response) => {
-  const { projectId, milestoneId } = req.body;
-  const reason = req.body.reason;
+  const { projectId, milestoneId, reason } = req.body as { projectId?: string; milestoneId?: string; reason?: string };
+  
+  if (!projectId || !milestoneId || !reason) {
+    throw new AppError("Missing required fields: projectId, milestoneId, and reason are required", 400);
+  }
+  if (reason.length < 10) {
+    throw new AppError("Reason must be at least 10 characters", 422);
+  }
+  
   const userId = req.user!.userId;
 
   const milestone = await prisma.milestone.findUnique({
@@ -19,10 +35,9 @@ export const raiseDispute = async (req: Request, res: Response) => {
   if (!milestone) throw new AppError("Milestone not found", 404);
 
   if (milestone.project.clientId !== userId && milestone.project.freelancerId !== userId) {
-    throw new AppError("Access denied", 403);
+    throw new AppError("Not authorized to raise a dispute on this project", 403);
   }
 
-  // Guards: Can only dispute UNDER_REVIEW or PENDING, not after release.
   if (milestone.status === "FUNDS_RELEASED" || milestone.status === "APPROVED") {
     throw new AppError("Cannot reverse approved milestones", 422);
   }
@@ -37,7 +52,6 @@ export const raiseDispute = async (req: Request, res: Response) => {
     },
   });
 
-  // Lock the actual milestone logically to prevent release attempts
   await prisma.milestone.update({
     where: { id: milestoneId },
     data: { status: "DISPUTED" },
@@ -58,6 +72,13 @@ export const raiseDispute = async (req: Request, res: Response) => {
   res.status(201).json({ success: true, data: dispute });
 };
 
+/**
+ * Retrieves a single dispute with all messages.
+ * @param req - Express request with dispute ID in params
+ * @param res - Express response
+ * @throws {AppError} 404 if dispute not found
+ * @throws {AppError} 403 if user is not part of the project
+ */
 export const getDispute = async (req: Request, res: Response) => {
   const disputeId = req.params.id as string;
   const userId = req.user!.userId;
@@ -78,6 +99,14 @@ export const getDispute = async (req: Request, res: Response) => {
   res.status(200).json({ success: true, data: dispute });
 };
 
+/**
+ * Generates an AI-mediated summary of the dispute chat and proposes a resolution.
+ * @param req - Express request with dispute ID in params
+ * @param res - Express response
+ * @throws {AppError} 404 if dispute not found
+ * @throws {AppError} 403 if user is not part of the project
+ * @throws {AppError} 422 if no messages exist to summarize
+ */
 export const generateAiSummary = async (req: Request, res: Response) => {
   const disputeId = req.params.id as string;
   const userId = req.user!.userId;
@@ -105,7 +134,7 @@ export const generateAiSummary = async (req: Request, res: Response) => {
   const updated = await prisma.dispute.update({
     where: { id: disputeId },
     data: {
-      aiSummary: summary,
+      aiSummary: summary as unknown as Prisma.InputJsonValue,
       proposedFreelancerPct: freelancerPct,
       proposedClientPct: clientPct,
       status: "IN_MEDIATION",
@@ -115,6 +144,15 @@ export const generateAiSummary = async (req: Request, res: Response) => {
   res.status(200).json({ success: true, data: updated });
 };
 
+/**
+ * Resolves a dispute by splitting the milestone funds between freelancer and client.
+ * @param req - Express request with dispute ID and split percentages
+ * @param res - Express response
+ * @throws {AppError} 422 if split doesn't sum to 100
+ * @throws {AppError} 404 if dispute not found
+ * @throws {AppError} 403 if user is not part of the project
+ * @throws {AppError} 422 if dispute already resolved
+ */
 export const resolveDispute = async (req: Request, res: Response) => {
   const disputeId = req.params.id as string;
   const userId = req.user!.userId;
@@ -139,8 +177,6 @@ export const resolveDispute = async (req: Request, res: Response) => {
   const freelancerAmount = (amount * freelancerPct) / 100;
   const clientAmount = (amount * clientPct) / 100;
 
-  // Prototype ledger entries: one resolve entry for each side of the split.
-  // Funds always leave escrow (DEBIT); payout accounting is simulated in ledger.
   if (freelancerAmount > 0) {
     await processEscrowEvent(
       walletId,
@@ -164,7 +200,6 @@ export const resolveDispute = async (req: Request, res: Response) => {
     );
   }
 
-  // Mark dispute resolved; milestone becomes FUNDS_RELEASED (terminal) for demo flow continuity.
   const updated = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
     const d = await tx.dispute.update({
       where: { id: disputeId },

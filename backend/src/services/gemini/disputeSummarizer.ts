@@ -1,15 +1,32 @@
 import { GoogleGenerativeAI, HarmCategory, HarmBlockThreshold } from "@google/generative-ai";
-import { AppError } from "../../lib/AppError";
+
+export interface DisputeSummary {
+  freelancerClaim: string;
+  clientClaim: string;
+  agreedPoints: string[];
+  proposedResolution: string;
+  suggestedSplit: {
+    freelancer: number;
+    client: number;
+  };
+}
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || "missing_key");
 
-export async function generateDisputeSummary(chatLog: string): Promise<any> {
+/**
+ * Generates a neutral AI-mediated summary of a dispute chat between freelancer and client.
+ * Uses Gemini 1.5 Flash with strict safety settings for harassment/hate speech.
+ * Falls back to default resolution on error.
+ * @param chatLog - The complete transcript of dispute messages
+ * @returns Promise<DisputeSummary> with claims, agreements, and suggested resolution
+ */
+export async function generateDisputeSummary(chatLog: string): Promise<DisputeSummary> {
 
   try {
     const model = genAI.getGenerativeModel({
       model: process.env.GEMINI_MODEL || "gemini-1.5-flash",
       generationConfig: {
-        temperature: 0.1, // Highly deterministic
+        temperature: 0.1,
         responseMimeType: "application/json",
       },
       safetySettings: [
@@ -45,6 +62,7 @@ Return JSON only:
     const result = await model.generateContent(prompt);
     return JSON.parse(result.response.text());
   } catch (err) {
+    console.error("Gemini dispute summarization failed:", err);
     return {
       freelancerClaim: "AI summary pending detail analysis.",
       clientClaim: "AI summary pending detail analysis.",
