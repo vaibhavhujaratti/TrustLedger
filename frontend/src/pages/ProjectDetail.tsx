@@ -3,33 +3,25 @@ import { useParams, useNavigate } from "react-router-dom";
 import { Button, Card, Badge } from "../components/ui/core";
 import { useAuthStore } from "../stores/authStore";
 import { useApproveMilestone, useReviewMilestone, useSubmitMilestone } from "../api/useMilestones";
-
-// Mocks to represent the data
-const dummyProject = {
-  id: "test-id",
-  title: "Website Redesign",
-  status: "IN_PROGRESS",
-  deadline: "2026-12-31",
-  client: "Alice",
-  freelancer: "Bob",
-  escrow: { deposited: 20000, released: 5000 },
-  milestones: [
-    { id: "m1", title: "Design", amount: 5000, status: "FUNDS_RELEASED" },
-    { id: "m2", title: "Frontend", amount: 10000, status: "SUBMITTED" },
-    { id: "m3", title: "Backend", amount: 5000, status: "PENDING" },
-  ]
-};
+import { useProject } from "../api/useProjects";
 
 export default function ProjectDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
   const { user } = useAuthStore();
+  const { data: project, isLoading, error } = useProject(id!);
 
   const isClient = user?.role === "CLIENT";
 
   const { mutate: approve } = useApproveMilestone(id!);
   const { mutate: review } = useReviewMilestone(id!);
   const { mutate: submit } = useSubmitMilestone(id!);
+
+  if (isLoading) return <div className="flex justify-center py-20 text-gray-500">Loading project...</div>;
+  if (error || !project) return <div className="flex justify-center py-20 text-red-500">Project not found.</div>;
+
+  const deposited = Number(project.escrowWallet?.totalDeposited ?? 0);
+  const released = Number(project.escrowWallet?.totalReleased ?? 0);
 
   return (
     <div className="max-w-6xl mx-auto py-8">
@@ -38,29 +30,34 @@ export default function ProjectDetail() {
         <div className="col-span-1 border-r border-border md:col-span-8 pr-6 space-y-6">
           <header className="space-y-2 mb-10">
             <div className="flex justify-between">
-              <h1 className="text-4xl font-bold">{dummyProject.title}</h1>
-              <Badge status={dummyProject.status} />
+              <h1 className="text-4xl font-bold">{project.title}</h1>
+              <Badge status={project.status} />
             </div>
-            <p className="text-gray-500">Client: {dummyProject.client} • Freelancer: {dummyProject.freelancer}</p>
+            <p className="text-gray-500">
+              Client: {(project as any).client?.displayName} • Freelancer: {(project as any).freelancer?.displayName ?? "Not assigned"}
+            </p>
           </header>
 
           <h2 className="text-xl font-bold pb-2 border-b">Milestone Timeline</h2>
           <div className="space-y-4">
-            {dummyProject.milestones.map((m) => (
+            {(project.milestones ?? []).map((m) => (
               <Card key={m.id} className="flex flex-col md:flex-row items-center justify-between p-4">
                 <div className="flex flex-col space-y-1">
                   <span className="font-bold flex items-center space-x-2">
                     <span>{m.title}</span> <Badge status={m.status}>{m.status}</Badge>
                   </span>
-                  <span className="text-sm text-gray-500">₹{m.amount}</span>
+                  <span className="text-sm text-gray-500">₹{Number(m.amount).toLocaleString()}</span>
                 </div>
-                
+
                 <div className="mt-4 md:mt-0 flex space-x-2">
                   {isClient && m.status === "SUBMITTED" && (
                     <>
-                      <Button variant="danger" onClick={() => navigate(`/projects/${id}/dispute/${m.id}`)}>Review / Dispute</Button>
-                      <Button variant="success" onClick={() => approve(m.id)}>Release ₹{m.amount}</Button>
+                      <Button variant="danger" onClick={() => navigate(`/projects/${id}/dispute/${m.id}`)}>Dispute</Button>
+                      <Button variant="success" onClick={() => approve(m.id)}>Release ₹{Number(m.amount).toLocaleString()}</Button>
                     </>
+                  )}
+                  {isClient && m.status === "UNDER_REVIEW" && (
+                    <Button variant="success" onClick={() => approve(m.id)}>Release ₹{Number(m.amount).toLocaleString()}</Button>
                   )}
                   {!isClient && m.status === "PENDING" && (
                     <Button variant="primary" onClick={() => submit({ milestoneId: m.id, url: "https://example.com" })}>Submit Deliverable</Button>
@@ -78,15 +75,17 @@ export default function ProjectDetail() {
             <div className="space-y-4">
               <div className="flex justify-between">
                 <span className="text-gray-500">Total Deposited</span>
-                <span className="font-bold">₹{dummyProject.escrow.deposited}</span>
+                <span className="font-bold">₹{deposited.toLocaleString()}</span>
               </div>
               <div className="flex justify-between">
                 <span className="text-gray-500">Funds Released</span>
-                <span className="font-bold text-trust-green">₹{dummyProject.escrow.released}</span>
+                <span className="font-bold text-trust-green">₹{released.toLocaleString()}</span>
               </div>
-              <div className="w-full bg-gray-200 rounded-full h-2.5 mt-2">
-                <div className="bg-trust-green h-2.5 rounded-full" style={{ width: `${(dummyProject.escrow.released / dummyProject.escrow.deposited) * 100}%` }}></div>
-              </div>
+              {deposited > 0 && (
+                <div className="w-full bg-gray-200 rounded-full h-2.5 mt-2">
+                  <div className="bg-trust-green h-2.5 rounded-full" style={{ width: `${(released / deposited) * 100}%` }}></div>
+                </div>
+              )}
             </div>
             {isClient && (
               <Button onClick={() => navigate(`/projects/${id}/invoice`)} variant="outline" className="w-full mt-6">Generate Invoice</Button>

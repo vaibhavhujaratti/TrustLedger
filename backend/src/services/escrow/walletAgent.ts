@@ -1,6 +1,7 @@
-import { LedgerEntryType } from "@prisma/client";
 import { prisma } from "../../lib/prisma";
 import { AppError } from "../../lib/AppError";
+
+type LedgerEntryType = "DEPOSIT" | "MILESTONE_LOCK" | "RELEASE" | "REFUND" | "DISPUTE_HOLD" | "DISPUTE_RESOLVE";
 
 type WalletEntryInfo = {
   walletId: string;
@@ -20,7 +21,7 @@ export async function processEscrowEvent(
   milestoneId?: string | null,
   memo?: string
 ) {
-  return prisma.$transaction(async (tx) => {
+  return prisma.$transaction(async (tx: typeof prisma) => {
     const wallet = await tx.escrowWallet.findUniqueOrThrow({
       where: { id: walletId },
     });

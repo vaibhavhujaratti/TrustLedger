@@ -31,7 +31,10 @@ function App() {
           <h1 className="text-xl font-bold font-mono tracking-tight text-trust-green">Trust-Bound</h1>
           <div>
             {isAuthenticated ? (
-              <span className="text-sm text-gray-600 mr-4">Logged in as {user?.email} ({user?.role})</span>
+              <div className="flex items-center gap-4">
+                <span className="text-sm text-gray-600">Logged in as {user?.email} ({user?.role})</span>
+                <button onClick={() => { useAuthStore.getState().logout(); window.location.href = '/'; }} className="text-sm text-trust-red hover:underline">Logout</button>
+              </div>
             ) : (
               <a href="/login" className="text-trust-blue hover:underline">Log in</a>
             )}

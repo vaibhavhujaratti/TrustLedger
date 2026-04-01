@@ -2,6 +2,17 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiClient } from "./client";
 import type { Project } from "../types/user";
 
+export function useMyProjects() {
+  return useQuery({
+    queryKey: ["projects"],
+    queryFn: async () => {
+      const { data } = await apiClient.get<{ data: Project[] }>("/projects");
+      return data.data;
+    },
+    staleTime: 30_000,
+  });
+}
+
 export function useProject(projectId: string) {
   return useQuery({
     queryKey: ["projects", projectId],
