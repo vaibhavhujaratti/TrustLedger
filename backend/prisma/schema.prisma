@@ -1,0 +1,307 @@
+// prisma/schema.prisma
+// Trust-Bound Freelance Escrow & Invoicing Platform
+// See docs/SCHEMA.md for design rationale and invariants.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─────────────────────────────────────────
+// USERS & AUTH
+// ─────────────────────────────────────────
+
+enum UserRole {
+  FREELANCER
+  CLIENT
+}
+
+model User {
+  id            String    @id @default(cuid())
+  email         String    @unique
+  passwordHash  String
+  role          UserRole
+  displayName   String
+  upiHandle     String?
+  avatarUrl     String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  // Relations
+  clientProjects     Project[]          @relation("ClientProjects")
+  freelancerProjects Project[]          @relation("FreelancerProjects")
+  walletEntries      WalletLedger[]
+  sentMessages       DisputeMessage[]
+  notifications      Notification[]
+  signatures         ContractSignature[]
+
+  @@index([email])
+  @@map("users")
+}
+
+model RefreshToken {
+  id        String   @id @default(cuid())
+  userId    String
+  token     String   @unique
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@index([token])
+  @@map("refresh_tokens")
+}
+
+// ─────────────────────────────────────────
+// PROJECTS & CONTRACTS
+// ─────────────────────────────────────────
+
+enum ProjectStatus {
+  DRAFT
+  CONTRACT_REVIEW
+  AWAITING_DEPOSIT
+  ACTIVE
+  COMPLETED
+  DISPUTED
+  CANCELLED
+}
+
+model Project {
+  id             String        @id @default(cuid())
+  title          String
+  description    String        @db.Text
+  totalBudget    Decimal       @db.Decimal(12, 2)
+  currency       String        @default("INR")
+  deadline       DateTime
+  status         ProjectStatus @default(DRAFT)
+  clientId       String
+  freelancerId   String?
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+
+  // Relations
+  client         User          @relation("ClientProjects", fields: [clientId], references: [id])
+  freelancer     User?         @relation("FreelancerProjects", fields: [freelancerId], references: [id])
+  milestones     Milestone[]
+  contract       Contract?
+  escrowWallet   EscrowWallet?
+  invoices       Invoice[]
+  disputes       Dispute[]
+
+  @@index([clientId])
+  @@index([freelancerId])
+  @@index([status])
+  @@map("projects")
+}
+
+model Contract {
+  id          String   @id @default(cuid())
+  projectId   String   @unique
+  clauses     Json
+  createdAt   DateTime @default(now())
+
+  // Relations
+  project     Project  @relation(fields: [projectId], references: [id])
+  signatures  ContractSignature[]
+
+  @@map("contracts")
+}
+
+model ContractSignature {
+  id          String   @id @default(cuid())
+  contractId  String
+  userId      String
+  ipHash      String
+  signedAt    DateTime @default(now())
+
+  // Relations
+  contract    Contract @relation(fields: [contractId], references: [id])
+  user        User     @relation(fields: [userId], references: [id])
+
+  @@unique([contractId, userId])
+  @@map("contract_signatures")
+}
+
+// ─────────────────────────────────────────
+// MILESTONES
+// ─────────────────────────────────────────
+
+enum MilestoneStatus {
+  PENDING
+  SUBMITTED
+  UNDER_REVIEW
+  APPROVED
+  DISPUTED
+  FUNDS_RELEASED
+}
+
+model Milestone {
+  id                   String          @id @default(cuid())
+  projectId            String
+  title                String
+  description          String          @db.Text
+  budgetPercent        Int
+  amount               Decimal         @db.Decimal(12, 2)
+  estimatedDays        Int
+  verificationCriteria String          @db.Text
+  sequenceOrder        Int
+  status               MilestoneStatus @default(PENDING)
+  deliverableUrl       String?
+  submittedAt          DateTime?
+  approvedAt           DateTime?
+  createdAt            DateTime        @default(now())
+  updatedAt            DateTime        @updatedAt
+
+  // Relations
+  project              Project         @relation(fields: [projectId], references: [id])
+  disputes             Dispute[]
+  walletEntries        WalletLedger[]
+
+  @@index([projectId, sequenceOrder])
+  @@index([status])
+  @@map("milestones")
+}
+
+// ─────────────────────────────────────────
+// ESCROW WALLET & LEDGER
+// ─────────────────────────────────────────
+
+model EscrowWallet {
+  id              String   @id @default(cuid())
+  projectId       String   @unique
+  totalDeposited  Decimal  @db.Decimal(12, 2) @default(0)
+  totalReleased   Decimal  @db.Decimal(12, 2) @default(0)
+  totalRefunded   Decimal  @db.Decimal(12, 2) @default(0)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  // Relations
+  project         Project  @relation(fields: [projectId], references: [id])
+  ledgerEntries   WalletLedger[]
+
+  @@map("escrow_wallets")
+}
+
+enum LedgerEntryType {
+  DEPOSIT
+  MILESTONE_LOCK
+  RELEASE
+  REFUND
+  DISPUTE_HOLD
+  DISPUTE_RESOLVE
+}
+
+model WalletLedger {
+  id           String          @id @default(cuid())
+  walletId     String
+  milestoneId  String?
+  entryType    LedgerEntryType
+  amount       Decimal         @db.Decimal(12, 2)
+  direction    String
+  actorId      String
+  memo         String?
+  createdAt    DateTime        @default(now())
+
+  // Relations
+  wallet       EscrowWallet    @relation(fields: [walletId], references: [id])
+  milestone    Milestone?      @relation(fields: [milestoneId], references: [id])
+  actor        User            @relation(fields: [actorId], references: [id])
+
+  @@index([walletId, createdAt])
+  @@index([milestoneId])
+  @@map("wallet_ledger")
+}
+
+// ─────────────────────────────────────────
+// DISPUTES
+// ─────────────────────────────────────────
+
+enum DisputeStatus {
+  OPEN
+  AWAITING_RESPONSE
+  IN_MEDIATION
+  RESOLVED
+  ESCALATED
+}
+
+model Dispute {
+  id                    String        @id @default(cuid())
+  projectId             String
+  milestoneId           String
+  raisedByUserId        String
+  reason                String        @db.Text
+  status                DisputeStatus @default(OPEN)
+  aiSummary             Json?
+  proposedFreelancerPct Int?
+  proposedClientPct     Int?
+  resolvedAt            DateTime?
+  createdAt             DateTime      @default(now())
+  updatedAt             DateTime      @updatedAt
+
+  // Relations
+  project              Project       @relation(fields: [projectId], references: [id])
+  milestone            Milestone     @relation(fields: [milestoneId], references: [id])
+  messages             DisputeMessage[]
+
+  @@index([projectId])
+  @@index([status])
+  @@map("disputes")
+}
+
+model DisputeMessage {
+  id        String   @id @default(cuid())
+  disputeId String
+  senderId  String
+  body      String   @db.Text
+  createdAt DateTime @default(now())
+
+  // Relations
+  dispute   Dispute  @relation(fields: [disputeId], references: [id])
+  sender    User     @relation(fields: [senderId], references: [id])
+
+  @@index([disputeId, createdAt])
+  @@map("dispute_messages")
+}
+
+// ─────────────────────────────────────────
+// INVOICES
+// ─────────────────────────────────────────
+
+model Invoice {
+  id            String   @id @default(cuid())
+  projectId     String
+  invoiceNumber String   @unique
+  pdfUrl        String?
+  issuedAt      DateTime @default(now())
+  totalAmount   Decimal  @db.Decimal(12, 2)
+  metadata      Json
+
+  // Relations
+  project       Project  @relation(fields: [projectId], references: [id])
+
+  @@index([projectId])
+  @@map("invoices")
+}
+
+// ─────────────────────────────────────────
+// NOTIFICATIONS
+// ─────────────────────────────────────────
+
+model Notification {
+  id        String   @id @default(cuid())
+  userId    String
+  title     String
+  body      String
+  type      String
+  linkPath  String?
+  isRead    Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  // Relations
+  user      User     @relation(fields: [userId], references: [id])
+
+  @@index([userId, isRead])
+  @@map("notifications")
+}
