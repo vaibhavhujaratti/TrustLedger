@@ -13,6 +13,31 @@ export function useMyProjects() {
   });
 }
 
+export function useOpenProjects() {
+  return useQuery({
+    queryKey: ["projects", "open"],
+    queryFn: async () => {
+      const { data } = await apiClient.get<{ data: any[] }>("/projects/open");
+      return data.data;
+    },
+    staleTime: 30_000,
+  });
+}
+
+export function useApplyToProject() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (projectId: string) => {
+      const { data } = await apiClient.post(`/projects/${projectId}/apply`);
+      return data.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["projects"] });
+      queryClient.invalidateQueries({ queryKey: ["projects", "open"] });
+    },
+  });
+}
+
 export function useProject(projectId: string) {
   return useQuery({
     queryKey: ["projects", projectId],

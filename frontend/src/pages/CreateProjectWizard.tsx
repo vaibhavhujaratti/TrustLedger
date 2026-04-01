@@ -18,6 +18,7 @@ export default function CreateProjectWizard() {
   const [milestones, setMilestones] = useState<MilestoneSuggestion[]>([]);
   const [clauses, setClauses] = useState<{ title: string; body: string }[]>([]);
   const [agreed, setAgreed] = useState(false);
+  const [stepError, setStepError] = useState<string | null>(null);
   const navigate = useNavigate();
   const createProject = useCreateProject();
   const linkFreelancer = useLinkFreelancer();
@@ -83,22 +84,29 @@ export default function CreateProjectWizard() {
               onChange={(e: any) => setForm({ ...form, freelancerEmail: e.target.value })}
             />
             <div className="flex justify-end pt-4">
+              {stepError && <p className="text-sm text-trust-red mr-auto">{stepError}</p>}
               <Button
                 onClick={async () => {
-                  const pid = await ensureProject();
-                  if (form.freelancerEmail.trim()) {
-                    await linkFreelancer.mutateAsync({ projectId: pid, email: form.freelancerEmail.trim() });
-                  }
-                  aiMilestones.mutate(
-                    { title: form.title, description: form.description, budget: Number(form.budget), deadline: form.deadline },
-                    {
-                      onSuccess: async (data) => {
-                        setMilestones(data);
-                        await persistMilestones.mutateAsync({ projectId: pid, milestones: data });
-                        setStep(2);
-                      },
+                  setStepError(null);
+                  try {
+                    const pid = await ensureProject();
+                    if (form.freelancerEmail.trim()) {
+                      await linkFreelancer.mutateAsync({ projectId: pid, email: form.freelancerEmail.trim() });
                     }
-                  );
+                    aiMilestones.mutate(
+                      { title: form.title, description: form.description, budget: Number(form.budget), deadline: form.deadline },
+                      {
+                        onSuccess: async (data) => {
+                          setMilestones(data);
+                          await persistMilestones.mutateAsync({ projectId: pid, milestones: data });
+                          setStep(2);
+                        },
+                        onError: (e: any) => setStepError(e?.response?.data?.error || "Failed to generate milestones"),
+                      }
+                    );
+                  } catch (e: any) {
+                    setStepError(e?.response?.data?.error || "Failed to create project");
+                  }
                 }}
                 disabled={createProject.isPending || aiMilestones.isPending || persistMilestones.isPending}
               >
@@ -160,21 +168,24 @@ export default function CreateProjectWizard() {
               <label htmlFor="agree">I have read and agree to these generated terms</label>
             </div>
             <div className="flex justify-between">
-              <Button variant="outline" onClick={() => setStep(2)}>← Back</Button>
+              <Button variant="outline" onClick={() => { setStepError(null); setStep(2); }}>← Back</Button>
               <Button
                 onClick={async () => {
-                  const pid = await ensureProject();
-                  await signContract.mutateAsync({ projectId: pid, ipHash: crypto.randomUUID().replace(/-/g, "") });
-                  setStep(4);
+                  setStepError(null);
+                  try {
+                    const pid = await ensureProject();
+                    await signContract.mutateAsync({ projectId: pid, ipHash: crypto.randomUUID().replace(/-/g, "") });
+                    setStep(4);
+                  } catch (e: any) {
+                    setStepError(e?.response?.data?.error || "Failed to sign contract");
+                  }
                 }}
                 disabled={!agreed || signContract.isPending || !projectId}
               >
                 {signContract.isPending ? "Signing..." : "Sign Contract →"}
               </Button>
             </div>
-            <p className="text-xs text-gray-500">
-              Note: the freelancer must also sign from their account before escrow deposit is enabled.
-            </p>
+            {stepError && <p className="text-sm text-trust-red">{stepError}</p>}
           </div>
         )}
 
@@ -186,19 +197,23 @@ export default function CreateProjectWizard() {
             <p className="text-sm text-gray-500 max-w-sm mx-auto">
               Funds are held securely. You have absolute control to release them as each milestone is approved.
             </p>
-            <div className="flex justify-center pt-8">
+            <div className="flex justify-center pt-8 flex-col items-center gap-3">
+              {stepError && <p className="text-sm text-trust-red">{stepError}</p>}
               <Button
                 variant="success"
                 className="px-10 py-4 text-xl shadow-lg"
                 disabled={createProject.isPending || !projectId || depositEscrow.isPending}
                 onClick={() => {
+                  setStepError(null);
                   depositEscrow.mutate(Number(form.budget), {
                     onSuccess: () => navigate(`/projects/${projectId}`),
+                    onError: (e: any) => setStepError(e?.response?.data?.error || "Deposit failed. Please try again."),
                   });
                 }}
               >
-                {depositEscrow.isPending ? "Depositing..." : `Deposit ₹${form.budget}`}
+                {depositEscrow.isPending ? "Depositing..." : `Confirm Deposit ₹${form.budget}`}
               </Button>
+              <p className="text-xs text-gray-400">This is a simulated escrow — no real money is transferred.</p>
             </div>
           </div>
         )}

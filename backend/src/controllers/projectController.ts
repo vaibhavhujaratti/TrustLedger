@@ -3,6 +3,48 @@ import { prisma } from "../lib/prisma";
 import { AppError } from "../lib/AppError";
 import { Prisma } from "@prisma/client";
 
+export const getOpenProjects = async (req: Request, res: Response) => {
+  const projects = await prisma.project.findMany({
+    where: {
+      freelancerId: null,
+      status: { in: ["DRAFT", "CONTRACT_REVIEW"] },
+    },
+    include: { client: { select: { displayName: true } }, milestones: true },
+    orderBy: { createdAt: "desc" },
+  });
+  res.status(200).json({ success: true, data: projects });
+};
+
+export const applyToProject = async (req: Request, res: Response) => {
+  const projectId = req.params.projectId as string;
+  const userId = req.user!.userId;
+  const role = req.user!.role;
+
+  if (role !== "FREELANCER") throw new AppError("Only freelancers can apply", 403);
+
+  const project = await prisma.project.findUnique({ where: { id: projectId } });
+  if (!project) throw new AppError("Project not found", 404);
+  if (project.freelancerId) throw new AppError("Project already has a freelancer", 422);
+
+  const updated = await prisma.project.update({
+    where: { id: projectId },
+    data: { freelancerId: userId, status: "CONTRACT_REVIEW" },
+    include: { milestones: true, escrowWallet: true, client: true, freelancer: true },
+  });
+
+  await prisma.notification.create({
+    data: {
+      userId: project.clientId,
+      title: "Freelancer Applied",
+      body: `A freelancer has applied to your project "${project.title}".`,
+      type: "FREELANCER_APPLIED",
+      linkPath: `/projects/${projectId}`,
+    },
+  });
+
+  res.status(200).json({ success: true, data: updated });
+};
+
 export const getMyProjects = async (req: Request, res: Response) => {
   const userId = req.user!.userId;
   const role = req.user!.role;
@@ -103,7 +145,7 @@ export const persistMilestones = async (req: Request, res: Response) => {
 
   const totalBudget = new Prisma.Decimal(project.totalBudget);
 
-  const updated = await prisma.$transaction(async (tx) => {
+  const updated = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
     await tx.milestone.deleteMany({ where: { projectId } });
 
     const created = await Promise.all(
@@ -175,7 +217,6 @@ export const signContract = async (req: Request, res: Response) => {
   if (project.clientId !== userId && project.freelancerId !== userId) {
     throw new AppError("Access denied", 403);
   }
-  if (!project.freelancerId) throw new AppError("Project has no freelancer linked", 422);
   if (!project.contract) throw new AppError("Contract not created", 422);
 
   await prisma.contractSignature.upsert({
@@ -190,7 +231,9 @@ export const signContract = async (req: Request, res: Response) => {
   });
 
   const signedClient = sigs.some((s) => s.userId === project.clientId);
-  const signedFreelancer = sigs.some((s) => s.userId === project.freelancerId);
+  const signedFreelancer = project.freelancerId
+    ? sigs.some((s) => s.userId === project.freelancerId)
+    : false;
 
   const updatedProject =
     signedClient && signedFreelancer

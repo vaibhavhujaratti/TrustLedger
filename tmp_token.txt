@@ -1,0 +1,1 @@
+{"success":true,"data":{"token":"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiJjbW5mdGcwNnMwMDAwdWd5NnoycXNheDVnIiwicm9sZSI6IkNMSUVOVCIsImlhdCI6MTc3NTAzNTQwOCwiZXhwIjoxNzc1MDM2MzA4fQ.AR0QD8GMxIuMDJo5iMkZd_0PduoaksYk6p-bKTVttxM","user":{"id":"cmnftg06s0000ugy6z2qsax5g","email":"client@demo.com","role":"CLIENT","displayName":"Arjun Mehta"}}}
