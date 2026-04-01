@@ -5,8 +5,10 @@ import { validateBody } from "../middleware/validate";
 import {
   getMyProjects,
   getProject,
+  getOpenProjects,
   createProject,
   linkFreelancer,
+  applyToProject,
   persistMilestones,
   upsertContract,
   signContract,
@@ -16,21 +18,11 @@ import { createContractSchema, persistMilestonesSchema, signContractSchema } fro
 const router = Router();
 
 router.get("/", authenticate, asyncHandler(getMyProjects));
+router.get("/open", authenticate, authorizeRole("FREELANCER"), asyncHandler(getOpenProjects));
 router.get("/:id", authenticate, asyncHandler(getProject));
-
-router.post(
-  "/",
-  authenticate,
-  authorizeRole("CLIENT"),
-  asyncHandler(createProject)
-);
-
-router.post(
-  "/:projectId/link",
-  authenticate,
-  authorizeRole("CLIENT"),
-  asyncHandler(linkFreelancer)
-);
+router.post("/", authenticate, authorizeRole("CLIENT"), asyncHandler(createProject));
+router.post("/:projectId/apply", authenticate, authorizeRole("FREELANCER"), asyncHandler(applyToProject));
+router.post("/:projectId/link", authenticate, authorizeRole("CLIENT"), asyncHandler(linkFreelancer));
 
 router.post(
   "/:projectId/milestones",

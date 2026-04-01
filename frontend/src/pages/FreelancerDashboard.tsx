@@ -22,6 +22,7 @@ export default function FreelancerDashboard() {
           <Button variant="outline" className="w-full text-left" onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}>Overview</Button>
           <Button variant="outline" className="w-full text-left" onClick={() => document.getElementById('jobs-section')?.scrollIntoView({ behavior: 'smooth' })}>My Jobs</Button>
           <Button variant="outline" className="w-full text-left" onClick={() => document.getElementById('earnings-section')?.scrollIntoView({ behavior: 'smooth' })}>Earnings</Button>
+          <Button variant="primary" className="w-full text-left" onClick={() => navigate('/job-board')}>🔍 Browse Jobs</Button>
         </nav>
       </aside>
 
@@ -31,6 +32,7 @@ export default function FreelancerDashboard() {
             <h1 className="text-3xl font-bold">Hi, {user?.displayName}</h1>
             <p className="text-gray-500">Welcome to your Freelancer dashboard</p>
           </div>
+          <Button variant="primary" onClick={() => navigate('/job-board')}>🔍 Browse Open Jobs</Button>
         </header>
 
         <section className="grid grid-cols-1 md:grid-cols-3 gap-4">

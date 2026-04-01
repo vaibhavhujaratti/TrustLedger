@@ -11,6 +11,7 @@ import CreateProjectWizard from "./pages/CreateProjectWizard";
 import ProjectDetail from "./pages/ProjectDetail";
 import DisputeChat from "./pages/DisputeChat";
 import InvoicePreview from "./pages/InvoicePreview";
+import JobBoard from "./pages/JobBoard";
 import { useMyNotifications, useMarkNotificationRead } from "./api/useNotifications";
 import { useMemo, useState } from "react";
 
@@ -94,6 +95,7 @@ function App() {
             
             <Route path="/projects/:projectId/dispute/:id" element={<ProtectedRoute><DisputeChat /></ProtectedRoute>} />
             <Route path="/projects/:projectId/invoice" element={<ProtectedRoute><InvoicePreview /></ProtectedRoute>} />
+            <Route path="/job-board" element={<ProtectedRoute allowedRole="FREELANCER"><JobBoard /></ProtectedRoute>} />
           </Routes>
         </main>
       </div>
