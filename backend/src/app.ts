@@ -8,6 +8,7 @@ import { milestoneRouter } from "./routes/milestones";
 import { disputeRouter } from "./routes/disputes";
 import { invoiceRouter } from "./routes/invoices";
 import { projectRouter } from "./routes/projects";
+import { aiRouter } from "./routes/ai";
 
 export const app = express();
 
@@ -22,6 +23,7 @@ app.use("/api/milestones", milestoneRouter);
 app.use("/api/disputes", disputeRouter);
 app.use("/api/invoices", invoiceRouter);
 app.use("/api/projects", projectRouter);
+app.use("/api/ai", aiRouter);
 
 // Global Error Handler
 app.use(errorHandler);
