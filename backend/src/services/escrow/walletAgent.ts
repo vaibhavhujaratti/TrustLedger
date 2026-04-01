@@ -1,7 +1,6 @@
+import { Prisma, LedgerEntryType } from "@prisma/client";
 import { prisma } from "../../lib/prisma";
 import { AppError } from "../../lib/AppError";
-
-type LedgerEntryType = "DEPOSIT" | "MILESTONE_LOCK" | "RELEASE" | "REFUND" | "DISPUTE_HOLD" | "DISPUTE_RESOLVE";
 
 type WalletEntryInfo = {
   walletId: string;
@@ -19,9 +18,10 @@ export async function processEscrowEvent(
   amount: number,
   actorId: string,
   milestoneId?: string | null,
-  memo?: string
+  memo?: string,
+  impact?: "DEPOSIT" | "RELEASE" | "REFUND" | null
 ) {
-  return prisma.$transaction(async (tx: typeof prisma) => {
+  return prisma.$transaction(async (tx: Prisma.TransactionClient) => {
     const wallet = await tx.escrowWallet.findUniqueOrThrow({
       where: { id: walletId },
     });
@@ -29,14 +29,27 @@ export async function processEscrowEvent(
     const balance = wallet.totalDeposited.minus(wallet.totalReleased).minus(wallet.totalRefunded);
 
     // Guard against insufficient funds
-    if (event === "RELEASE" && balance.lessThan(amount)) {
+    const effectiveImpact =
+      impact ??
+      (event === "DEPOSIT"
+        ? "DEPOSIT"
+        : event === "RELEASE"
+          ? "RELEASE"
+          : event === "REFUND"
+            ? "REFUND"
+            : null);
+
+    if ((event === "RELEASE" || effectiveImpact === "RELEASE") && balance.lessThan(amount)) {
       throw new AppError("Insufficient escrow balance to release funds", 422);
     }
     if (event === "MILESTONE_LOCK" && balance.lessThan(amount)) {
       throw new AppError("Insufficient escrow balance to lock milestone", 422);
     }
-    if (event === "REFUND" && balance.lessThan(amount)) {
+    if ((event === "REFUND" || effectiveImpact === "REFUND") && balance.lessThan(amount)) {
       throw new AppError("Insufficient escrow balance for refund", 422);
+    }
+    if (event === "DISPUTE_RESOLVE" && !effectiveImpact) {
+      throw new AppError("Dispute resolve impact missing", 500);
     }
 
     // Append the immutable ledger entry
@@ -56,11 +69,11 @@ export async function processEscrowEvent(
     await tx.escrowWallet.update({
       where: { id: walletId },
       data:
-        event === "DEPOSIT"
+        effectiveImpact === "DEPOSIT"
           ? { totalDeposited: { increment: amount } }
-          : event === "RELEASE"
+          : effectiveImpact === "RELEASE"
           ? { totalReleased: { increment: amount } }
-          : event === "REFUND"
+          : effectiveImpact === "REFUND"
           ? { totalRefunded: { increment: amount } }
           : {}, // locks don't alter absolute running totals
     });

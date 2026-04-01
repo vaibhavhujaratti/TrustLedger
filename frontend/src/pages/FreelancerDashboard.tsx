@@ -10,7 +10,7 @@ export default function FreelancerDashboard() {
   const { data: projects = [], isLoading } = useMyProjects();
 
   const totalReceived = projects.reduce((sum, p) => sum + Number((p as any).escrowWallet?.totalReleased ?? 0), 0);
-  const activeJobs = projects.filter(p => p.status === "ACTIVE" || p.status === "IN_PROGRESS" as any).length;
+  const activeJobs = projects.filter(p => p.status === "ACTIVE").length;
   const pendingActions = projects.reduce((sum, p) => {
     return sum + ((p.milestones ?? []).filter((m: any) => m.status === "PENDING").length);
   }, 0);

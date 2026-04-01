@@ -9,22 +9,16 @@ describe("Milestones FSM API", () => {
 
   it("walks the full happy path: PENDING -> SUBMITTED -> UNDER_REVIEW -> RELEASED", async () => {
     const { clientToken, freelancerToken, project } = await seedTestProject();
-    
-    // Create wallet and deposit funds before proceeding
-    const wallet = await prisma.escrowWallet.create({ data: { projectId: project.id } });
-    await prisma.walletLedger.create({ data: { walletId: wallet.id, entryType: "DEPOSIT", amount: 10000, direction: "CREDIT", actorId: "dummy" }});
-    await prisma.escrowWallet.update({ where: { id: wallet.id }, data: { totalDeposited: 10000 }});
 
-    // Create a pending milestone properly bound
-    const milestone = await prisma.milestone.create({
-      data: {
-        projectId: project.id,
-        title: "Test Task",
-        description: "Task description",
-        amount: 5000,
-        status: "PENDING",
-        estimatedDays: 5,
-      }
+    // Deposit funds via API (also locks milestones + activates project)
+    await request(app)
+      .post(`/api/escrow/${project.id}/deposit`)
+      .set("Authorization", `Bearer ${clientToken}`)
+      .send({ amount: 10000 });
+
+    const milestone = await prisma.milestone.findFirstOrThrow({
+      where: { projectId: project.id, status: "PENDING" },
+      orderBy: { sequenceOrder: "asc" },
     });
 
     // Step 1: Freelancer submits
@@ -50,7 +44,7 @@ describe("Milestones FSM API", () => {
     expect(appRes.body.data.status).toBe("FUNDS_RELEASED");
 
     // Recheck the wallet explicitly
-    const finalWallet = await prisma.escrowWallet.findUnique({ where: { id: wallet.id } });
-    expect(finalWallet?.totalReleased.toNumber()).toBe(5000);
+    const finalWallet = await prisma.escrowWallet.findFirst({ where: { projectId: project.id } });
+    expect(finalWallet?.totalReleased.toNumber()).toBe(Number(milestone.amount));
   });
 });

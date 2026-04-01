@@ -11,7 +11,7 @@ export default function ClientDashboard() {
 
   const inEscrow = projects.reduce((sum, p) => sum + Number((p as any).escrowWallet?.totalDeposited ?? 0), 0);
   const released = projects.reduce((sum, p) => sum + Number((p as any).escrowWallet?.totalReleased ?? 0), 0);
-  const activeProjects = projects.filter(p => p.status === "ACTIVE" || p.status === "IN_PROGRESS" as any).length;
+  const activeProjects = projects.filter(p => p.status === "ACTIVE").length;
   const completed = projects.filter(p => p.status === "COMPLETED" as any).length;
 
   return (

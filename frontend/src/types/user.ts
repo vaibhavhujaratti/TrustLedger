@@ -9,7 +9,21 @@ export interface User {
 }
 
 export type MilestoneStatus = "PENDING" | "SUBMITTED" | "UNDER_REVIEW" | "APPROVED" | "FUNDS_RELEASED" | "DISPUTED";
-export type ProjectStatus = "DRAFT" | "CONTRACT_REVIEW" | "FUNDED" | "IN_PROGRESS" | "COMPLETED" | "DISPUTED";
+export type ProjectStatus =
+  | "DRAFT"
+  | "CONTRACT_REVIEW"
+  | "AWAITING_DEPOSIT"
+  | "ACTIVE"
+  | "COMPLETED"
+  | "DISPUTED"
+  | "CANCELLED";
+
+export interface EscrowWallet {
+  id?: string;
+  totalDeposited: number;
+  totalReleased: number;
+  totalRefunded: number;
+}
 
 export interface Milestone {
   id: string;
@@ -29,4 +43,7 @@ export interface Project {
   clientId: string;
   freelancerId?: string | null;
   milestones?: Milestone[];
+  escrowWallet?: EscrowWallet | null;
+  client?: { displayName: string } | null;
+  freelancer?: { displayName: string } | null;
 }

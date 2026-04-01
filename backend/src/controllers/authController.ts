@@ -4,7 +4,7 @@ import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import { AppError } from "../lib/AppError";
 
-const JWT_SECRET = process.env.JWT_SECRET || "test-secret-key-for-testing-only";
+const JWT_SECRET = process.env.JWT_SECRET as string;
 const JWT_EXPIRES_IN = (process.env.JWT_EXPIRES_IN || "1h") as any;
 
 export const register = async (req: Request, res: Response) => {

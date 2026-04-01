@@ -1,27 +1,55 @@
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button, Input, Card } from "../components/ui/core";
-import { useCreateProject } from "../api/useProjects";
+import {
+  useCreateProject,
+  useLinkFreelancer,
+  usePersistMilestones,
+  useSignContract,
+  useUpsertContract,
+} from "../api/useProjects";
+import { useAiContract, useAiMilestones, type MilestoneSuggestion } from "../api/useAi";
+import { useDepositEscrow } from "../api/useEscrow";
 
 export default function CreateProjectWizard() {
   const [step, setStep] = useState(1);
-  const [form, setForm] = useState({ title: "", description: "", budget: "", deadline: "" });
+  const [form, setForm] = useState({ title: "", description: "", budget: "", deadline: "", freelancerEmail: "" });
+  const [projectId, setProjectId] = useState<string | null>(null);
+  const [milestones, setMilestones] = useState<MilestoneSuggestion[]>([]);
+  const [clauses, setClauses] = useState<{ title: string; body: string }[]>([]);
+  const [agreed, setAgreed] = useState(false);
   const navigate = useNavigate();
   const createProject = useCreateProject();
+  const linkFreelancer = useLinkFreelancer();
+  const aiMilestones = useAiMilestones();
+  const aiContract = useAiContract();
+  const persistMilestones = usePersistMilestones();
+  const upsertContract = useUpsertContract();
+  const signContract = useSignContract();
+  const depositEscrow = useDepositEscrow(projectId ?? "");
 
   const handleNext = () => {
     if (step < 4) setStep(step + 1);
   };
 
-  const handleCreate = async () => {
-    // In full implementation: trigger AI generator during transition steps.
-    createProject.mutate({
-      title: form.title,
-      description: form.description,
-      totalBudget: Number(form.budget),
-      deadline: form.deadline || new Date(Date.now() + 10*86400000).toISOString()
-    }, {
-      onSuccess: (data) => navigate(`/projects/${data.id}`)
+  const ensureProject = async (): Promise<string> => {
+    if (projectId) return projectId;
+    return await new Promise((resolve, reject) => {
+      createProject.mutate(
+        {
+          title: form.title,
+          description: form.description,
+          totalBudget: Number(form.budget),
+          deadline: form.deadline || new Date(Date.now() + 10 * 86400000).toISOString(),
+        },
+        {
+          onSuccess: (data) => {
+            setProjectId(data.id);
+            resolve(data.id);
+          },
+          onError: reject,
+        }
+      );
     });
   };
 
@@ -48,8 +76,34 @@ export default function CreateProjectWizard() {
               <div className="flex-1"><Input label="Total Budget (₹)" type="number" value={form.budget} onChange={(e: any) => setForm({...form, budget: e.target.value})} /></div>
               <div className="flex-1"><Input label="Deadline" type="date" value={form.deadline} onChange={(e: any) => setForm({...form, deadline: e.target.value})} /></div>
             </div>
+            <Input
+              label="Freelancer Email (to invite)"
+              placeholder="freelancer@demo.com"
+              value={form.freelancerEmail}
+              onChange={(e: any) => setForm({ ...form, freelancerEmail: e.target.value })}
+            />
             <div className="flex justify-end pt-4">
-              <Button onClick={handleNext}>Generate with AI →</Button>
+              <Button
+                onClick={async () => {
+                  const pid = await ensureProject();
+                  if (form.freelancerEmail.trim()) {
+                    await linkFreelancer.mutateAsync({ projectId: pid, email: form.freelancerEmail.trim() });
+                  }
+                  aiMilestones.mutate(
+                    { title: form.title, description: form.description, budget: Number(form.budget), deadline: form.deadline },
+                    {
+                      onSuccess: async (data) => {
+                        setMilestones(data);
+                        await persistMilestones.mutateAsync({ projectId: pid, milestones: data });
+                        setStep(2);
+                      },
+                    }
+                  );
+                }}
+                disabled={createProject.isPending || aiMilestones.isPending || persistMilestones.isPending}
+              >
+                {aiMilestones.isPending ? "Generating..." : "Generate with AI →"}
+              </Button>
             </div>
           </div>
         )}
@@ -59,13 +113,33 @@ export default function CreateProjectWizard() {
             <h2 className="text-2xl font-bold mb-6">Proposed AI Milestones</h2>
             <p className="text-gray-600 mb-4">Gemini extracted these milestones based on your description.</p>
             <Card className="p-4 bg-gray-50 space-y-2">
-              <div className="flex justify-between font-bold"><span>Design System & Mockup</span><span>30%</span></div>
-              <div className="flex justify-between font-bold"><span>Frontend Development</span><span>50%</span></div>
-              <div className="flex justify-between font-bold"><span>Final Integration & Polish</span><span>20%</span></div>
+              {milestones.map((m, idx) => (
+                <div key={idx} className="flex justify-between font-bold">
+                  <span>{m.title}</span>
+                  <span>{m.budgetPercent}%</span>
+                </div>
+              ))}
             </Card>
             <div className="flex justify-between pt-4">
               <Button variant="outline" onClick={() => setStep(1)}>← Back</Button>
-              <Button onClick={handleNext}>This Looks Good →</Button>
+              <Button
+                onClick={async () => {
+                  const pid = await ensureProject();
+                  aiContract.mutate(
+                    { title: form.title, description: form.description, milestones },
+                    {
+                      onSuccess: async (data) => {
+                        setClauses(data.clauses);
+                        await upsertContract.mutateAsync({ projectId: pid, clauses: data.clauses });
+                        setStep(3);
+                      },
+                    }
+                  );
+                }}
+                disabled={aiContract.isPending || upsertContract.isPending || milestones.length === 0}
+              >
+                {aiContract.isPending ? "Drafting..." : "This Looks Good →"}
+              </Button>
             </div>
           </div>
         )}
@@ -74,17 +148,33 @@ export default function CreateProjectWizard() {
           <div className="space-y-4 animate-in fade-in">
             <h2 className="text-2xl font-bold mb-6">Review Contract</h2>
             <Card className="p-6 bg-[#fdfbf7] border-[#e2dcd2] shadow-inner font-serif h-48 overflow-y-auto">
-              <h3 className="font-bold text-lg mb-2">Scope of Work</h3>
-              <p>The Developer agrees to implement the milestones bounded by the escrow limits...</p>
+              {clauses.map((c, idx) => (
+                <div key={idx} className="mb-4">
+                  <h3 className="font-bold text-lg mb-1">{c.title}</h3>
+                  <p className="text-sm leading-6">{c.body}</p>
+                </div>
+              ))}
             </Card>
             <div className="flex items-center space-x-2 py-4">
-              <input type="checkbox" id="agree" />
+              <input type="checkbox" id="agree" checked={agreed} onChange={(e) => setAgreed(e.target.checked)} />
               <label htmlFor="agree">I have read and agree to these generated terms</label>
             </div>
             <div className="flex justify-between">
               <Button variant="outline" onClick={() => setStep(2)}>← Back</Button>
-              <Button onClick={handleNext}>Sign Contract →</Button>
+              <Button
+                onClick={async () => {
+                  const pid = await ensureProject();
+                  await signContract.mutateAsync({ projectId: pid, ipHash: crypto.randomUUID().replace(/-/g, "") });
+                  setStep(4);
+                }}
+                disabled={!agreed || signContract.isPending || !projectId}
+              >
+                {signContract.isPending ? "Signing..." : "Sign Contract →"}
+              </Button>
             </div>
+            <p className="text-xs text-gray-500">
+              Note: the freelancer must also sign from their account before escrow deposit is enabled.
+            </p>
           </div>
         )}
 
@@ -97,8 +187,17 @@ export default function CreateProjectWizard() {
               Funds are held securely. You have absolute control to release them as each milestone is approved.
             </p>
             <div className="flex justify-center pt-8">
-              <Button variant="success" className="px-10 py-4 text-xl shadow-lg" disabled={createProject.isPending} onClick={handleCreate}>
-                {createProject.isPending ? "Locking..." : `Deposit ₹${form.budget}`}
+              <Button
+                variant="success"
+                className="px-10 py-4 text-xl shadow-lg"
+                disabled={createProject.isPending || !projectId || depositEscrow.isPending}
+                onClick={() => {
+                  depositEscrow.mutate(Number(form.budget), {
+                    onSuccess: () => navigate(`/projects/${projectId}`),
+                  });
+                }}
+              >
+                {depositEscrow.isPending ? "Depositing..." : `Deposit ₹${form.budget}`}
               </Button>
             </div>
           </div>

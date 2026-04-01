@@ -1,8 +1,13 @@
 import { GoogleGenerativeAI, HarmCategory, HarmBlockThreshold } from "@google/generative-ai";
+import { AppError } from "../../lib/AppError";
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || "missing_key");
 
 export async function generateDisputeSummary(chatLog: string): Promise<any> {
+  if (!process.env.GEMINI_API_KEY) {
+    throw new AppError("GEMINI_API_KEY is required", 500);
+  }
+
   try {
     const model = genAI.getGenerativeModel({
       model: process.env.GEMINI_MODEL || "gemini-1.5-flash",

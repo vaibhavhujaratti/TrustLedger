@@ -24,7 +24,7 @@ describe("Escrow API", () => {
     expect(wallet?.totalDeposited.toNumber()).toBe(15000);
 
     const ledger = await prisma.walletLedger.findMany({ where: { walletId: wallet!.id } });
-    expect(ledger.length).toBe(1);
-    expect(ledger[0].entryType).toBe("DEPOSIT");
+    expect(ledger.some((e) => e.entryType === "DEPOSIT")).toBe(true);
+    expect(ledger.some((e) => e.entryType === "MILESTONE_LOCK")).toBe(true);
   });
 });
